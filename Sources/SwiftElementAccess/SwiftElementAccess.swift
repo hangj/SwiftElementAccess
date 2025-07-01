@@ -794,14 +794,10 @@ public class Element {
                             continue
                         }
                     }
-                    if s == "\(value)" {
-                        continue
-                    }
-#else
-                    if let _ = "\(value)".range(of: s) {
-                        continue
-                    }
 #endif
+                    if let _ = s.range(of: "\(value)") {
+                        continue
+                    }
                 }
 
                 good = false
@@ -846,15 +842,11 @@ public class Element {
                         if let _ = try? r.wholeMatch(in: s) {
                             continue
                         }
-                    }
-                    if s == "\(value)" {
-                        continue
-                    }
-#else
-                    if let _ = "\(value)".range(of: s) {
-                        continue
-                    }
+                    }    
 #endif
+                    if let _ = s.range(of: "\(value)") {
+                        continue
+                    }
                 }
 
                 good = false
