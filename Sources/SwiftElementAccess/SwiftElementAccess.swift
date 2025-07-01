@@ -788,13 +788,17 @@ public class Element {
             for (attr, value) in attrs {
                 if let v: AnyObject? = ele.valueOfAttr(attr) {
                     let s = stringFromAXValue(v!)
-#if swift(>=5.6)
-                    if let r = try? Regex("\(value)") {
-                        if let _ = try? r.wholeMatch(in: s) {
-                            continue
+if #available(macOS 13.0, *) {
+    #if swift(>=5.6)
+                        if let r = try? Regex("\(value)") {
+                            if let _ = try? r.wholeMatch(in: s) {
+                                continue
+                            }
                         }
-                    }
-#endif
+    #endif
+} else {
+    // Fallback on earlier versions
+}
                     if let _ = s.range(of: "\(value)") {
                         continue
                     }
@@ -837,13 +841,17 @@ public class Element {
             for (attr, value) in attrs {
                 if let v: AnyObject? = ele.valueOfAttr(attr) {
                     let s = stringFromAXValue(v!)
-#if swift(>=5.6)
-                    if let r = try? Regex("\(value)") {
-                        if let _ = try? r.wholeMatch(in: s) {
-                            continue
+if #available(macOS 13.0, *) {
+    #if swift(>=5.6)
+                        if let r = try? Regex("\(value)") {
+                            if let _ = try? r.wholeMatch(in: s) {
+                                continue
+                            }
                         }
-                    }    
-#endif
+    #endif
+} else {
+    // Fallback on earlier versions
+}
                     if let _ = s.range(of: "\(value)") {
                         continue
                     }
