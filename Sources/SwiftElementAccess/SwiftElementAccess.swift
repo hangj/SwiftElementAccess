@@ -778,6 +778,7 @@ public class Element {
         return nil
     }
 
+    /// return the first found element
     public func findElement(_ attrs: [String: Any]) -> Element? {
         let queue = Queue<Element>()
         queue.push_back(value: self)
@@ -820,10 +821,65 @@ public class Element {
                 array = ele.children
             }
 
-            queue.push_back(contentsOf: array!)
+            if array != nil && !array!.isEmpty {
+                queue.push_back(contentsOf: array!)
+            }
         }
 
         return nil
+    }
+
+    /// return all the found elements
+    public func findAllElement(_ attrs: [String: Any]) -> [Element] {
+        var ret: [Element] = []
+
+        let queue = Queue<Element>()
+        queue.push_back(value: self)
+
+        while let ele = queue.pop_front() {
+            var good = true
+            for (attr, value) in attrs {
+                if let v: AnyObject? = ele.valueOfAttr(attr) {
+                    let s = stringFromAXValue(v!)
+#if swift(>=5.6)
+                    if let r = try? Regex("\(value)") {
+                        if let _ = try? r.wholeMatch(in: s) {
+                            continue
+                        }
+                    }
+                    if s == "\(value)" {
+                        continue
+                    }
+#else
+                    if let _ = "\(value)".range(of: s) {
+                        continue
+                    }
+#endif
+                }
+
+                good = false
+                break
+            }
+            if good {
+                ret.append(ele)
+            }
+
+            var array: [Element]?
+            if let role = attrs[kAXRoleAttribute] {
+                if "\(role)" == "AXWindow" {
+                    array = ele.windows
+                }
+            }
+            if array == nil {
+                array = ele.children
+            }
+
+            if array != nil && !array!.isEmpty {
+                queue.push_back(contentsOf: array!)
+            }
+        }
+
+        return ret
     }
 
     public func toDict(unique: inout Set<AXUIElement>) -> Any {
