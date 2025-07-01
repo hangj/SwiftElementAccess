@@ -402,6 +402,13 @@ public class Element {
         return NSRunningApplication(processIdentifier: pid)?.isTerminated ?? true
     }
 
+    public var isApplicationRunning: Bool {
+        if let s: Bool = self.valueOfAttr(kAXIsApplicationRunningAttribute) {
+            return s
+        }
+        return false
+    }
+
     /// ```
     /// Element.fromProcessName("WeChat")
     /// ```
