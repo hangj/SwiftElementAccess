@@ -1,6 +1,5 @@
 import Cocoa
 
-
 // public struct SwiftElementAccess {
 //     public private(set) var text = "Hello, World!"
 
@@ -683,6 +682,13 @@ public class Element {
         return ""
     }
 
+    public var help: String {
+        if let s: String = self.valueOfAttr(kAXHelpAttribute) {
+            return s
+        }
+        return ""
+    }
+
     public func value<T>() -> T? {
         if let v: T = self.valueOfAttr(kAXValueAttribute) {
             return v
@@ -761,9 +767,31 @@ public class Element {
         return []
     }
 
+    public var contents: [Element] {
+        var value : AnyObject?
+        let err = AXUIElementCopyAttributeValue(self.ele, kAXContentsAttribute as CFString, &value)
+        if err == .success {
+            if let arr = value as? [AXUIElement] {
+                return arr.map { Element($0) }
+            }
+        }
+        return []
+    }
+
     public var windows: [Element] {
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self.ele, kAXWindowsAttribute as CFString, &value)
+        if err == .success {
+            if let arr = value as? [AXUIElement] {
+                return arr.map { Element($0) }
+            }
+        }
+        return []
+    }
+
+    public var focusElements: [Element] {
+        var value : AnyObject?
+        let err = AXUIElementCopyAttributeValue(self.ele, kAXSharedFocusElementsAttribute as CFString, &value)
         if err == .success {
             if let arr = value as? [AXUIElement] {
                 return arr.map { Element($0) }
@@ -795,19 +823,12 @@ public class Element {
             for (attr, value) in attrs {
                 if let v: AnyObject? = ele.valueOfAttr(attr) {
                     let s = stringFromAXValue(v!)
-if #available(macOS 13.0, *) {
-    #if swift(>=5.6)
-                        if let r = try? Regex("\(value)") {
-                            if let _ = try? r.wholeMatch(in: s) {
-                                continue
-                            }
+                    if let regex = try? NSRegularExpression(pattern: "\(value)", options: []) {
+                        let arr = regex.matches(in: s, options: [], range: NSMakeRange(0, s.utf16.count))
+                        if arr.count == 1 {
+                            // print("s: \(s), value: \(value)")
+                            continue
                         }
-    #endif
-} else {
-    // Fallback on earlier versions
-}
-                    if let _ = s.range(of: "\(value)") {
-                        continue
                     }
                 }
 
@@ -848,19 +869,12 @@ if #available(macOS 13.0, *) {
             for (attr, value) in attrs {
                 if let v: AnyObject? = ele.valueOfAttr(attr) {
                     let s = stringFromAXValue(v!)
-if #available(macOS 13.0, *) {
-    #if swift(>=5.6)
-                        if let r = try? Regex("\(value)") {
-                            if let _ = try? r.wholeMatch(in: s) {
-                                continue
-                            }
+                    if let regex = try? NSRegularExpression(pattern: "\(value)", options: []) {
+                        let arr = regex.matches(in: s, options: [], range: NSMakeRange(0, s.utf16.count))
+                        if arr.count == 1 {
+                            // print("s: \(s), value: \(value)")
+                            continue
                         }
-    #endif
-} else {
-    // Fallback on earlier versions
-}
-                    if let _ = s.range(of: "\(value)") {
-                        continue
                     }
                 }
 
