@@ -556,6 +556,7 @@ public class Element {
     public func setAppFrontmost() {
         if self.isApplicationUIElement {
             AXUIElementSetAttributeValue(self.ele, kAXFrontmostAttribute as CFString, true as CFTypeRef)
+            sleep(1)
         } else {
             Element(fromPid: self.pid).setAppFrontmost()
         }
