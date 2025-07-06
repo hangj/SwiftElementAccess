@@ -392,6 +392,10 @@ public class Element {
         }
     }
 
+    public var hashValue: Int {
+        return self.ele.hashValue
+    }
+
     public var isAppTerminated: Bool {
         let pid = self.pid
         if pid < 0 {
