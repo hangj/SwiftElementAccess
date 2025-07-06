@@ -654,6 +654,14 @@ public class Element {
         self.role == kAXWindowRole
     }
 
+    public var appUIElement: Element {
+        if self.isApplicationUIElement {
+            return self
+        } else {
+            return Element(fromPid: self.pid)
+        }
+    }
+
     public var roleDesc: String {
         if let s: String = self.valueOfAttr(kAXRoleDescriptionAttribute) {
             return s
