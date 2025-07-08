@@ -370,7 +370,7 @@ public class Element {
         self.ele = ele
     }
 
-    convenience init(fromPid pid: pid_t) {
+    public convenience init(fromPid pid: pid_t) {
         let kAXManualAccessibility: CFString = "AXManualAccessibility" as CFString;
         let e = AXUIElementCreateApplication(pid)
         AXUIElementSetAttributeValue(e, kAXManualAccessibility, kCFBooleanTrue)
