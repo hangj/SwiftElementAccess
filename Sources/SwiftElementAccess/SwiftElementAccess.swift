@@ -412,6 +412,10 @@ public class Element {
         return false
     }
 
+    public static func fromPid(_ pid: pid_t) -> Element {
+        return Element(fromPid: pid)
+    }
+
     /// ```
     /// Element.fromProcessName("WeChat")
     /// ```
