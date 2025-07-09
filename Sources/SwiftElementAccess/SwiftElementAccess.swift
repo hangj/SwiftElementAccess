@@ -422,10 +422,10 @@ public class Element {
     public static func fromProcessName(_ name: String) -> [Element] {
         var ret: [Element] = []
 
-        for app in NSWorkspace.shared.runningApplications {
-            if app.localizedName == name {
-                ret.append(Element(fromPid: app.processIdentifier))
-            }
+        NSWorkspace.shared.runningApplications.filter {
+            $0.localizedName == name
+        }.forEach {
+            ret.append(Element.fromPid($0.processIdentifier))
         }
 
         return ret
@@ -436,11 +436,10 @@ public class Element {
     /// ```
     public static func fromBundleIdentifier(_ bundleIdentifier: String) -> [Element] {
         var ret: [Element] = []
-        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
-        for app in apps {
-            let pid = app.processIdentifier
-            ret.append(Element(fromPid: pid))
+        NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).forEach {
+            ret.append(Element.fromPid($0.processIdentifier))
         }
+
         return ret
     }
 
@@ -539,13 +538,12 @@ public class Element {
         self.watch(kAXAnnouncementRequestedNotification)
     }
 
-    /// This doesn't work
     public func activate() {
         if let app = NSRunningApplication(processIdentifier: self.pid) {
             print("app.isActive:", app.isActive)
             // Indicates whether the application is currently frontmost
             if !app.isActive {
-                print("app.activate:", app.activate(options: .activateAllWindows))
+                app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
             }
         }
     }
