@@ -544,6 +544,7 @@ public class Element {
             // Indicates whether the application is currently frontmost
             if !app.isActive {
                 app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+                app.unhide()
             }
         }
     }
@@ -561,6 +562,7 @@ public class Element {
 
     public func setAppFrontmost() {
         if self.isApplicationUIElement {
+            self.activate()
             AXUIElementSetAttributeValue(self.ele, kAXFrontmostAttribute as CFString, true as CFTypeRef)
             sleep(1)
         } else {
@@ -804,6 +806,45 @@ public class Element {
         return []
     }
 
+    public var window: Element? {
+        var value : AnyObject?
+        let err = AXUIElementCopyAttributeValue(self.ele, kAXWindowAttribute as CFString, &value)
+        if err == .success {
+            if let v = value {
+                if CFGetTypeID(v) == AXUIElementGetTypeID() {
+                    return Element(v as! AXUIElement)
+                }
+            }
+        }
+        return nil
+    }
+
+    public var mainWindow: Element? {
+        var value : AnyObject?
+        let err = AXUIElementCopyAttributeValue(self.ele, kAXMainWindowAttribute as CFString, &value)
+        if err == .success {
+            if let v = value {
+                if CFGetTypeID(v) == AXUIElementGetTypeID() {
+                    return Element(v as! AXUIElement)
+                }
+            }
+        }
+        return nil
+    }
+
+    public var focusedWindow: Element? {
+        var value : AnyObject?
+        let err = AXUIElementCopyAttributeValue(self.ele, kAXFocusedWindowAttribute as CFString, &value)
+        if err == .success {
+            if let v = value {
+                if CFGetTypeID(v) == AXUIElementGetTypeID() {
+                    return Element(v as! AXUIElement)
+                }
+            }
+        }
+        return nil
+    }
+
     public var focusElements: [Element] {
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self.ele, kAXSharedFocusElementsAttribute as CFString, &value)
@@ -818,6 +859,19 @@ public class Element {
     public var menuBar: Element? {
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self.ele, kAXMenuBarAttribute as CFString, &value)
+        if err == .success {
+            if let v = value {
+                if CFGetTypeID(v) == AXUIElementGetTypeID() {
+                    return Element(v as! AXUIElement)
+                }
+            }
+        }
+        return nil
+    }
+
+    public var extrasMenuBar: Element? {
+        var value : AnyObject?
+        let err = AXUIElementCopyAttributeValue(self.ele, kAXExtrasMenuBarAttribute as CFString, &value)
         if err == .success {
             if let v = value {
                 if CFGetTypeID(v) == AXUIElementGetTypeID() {
@@ -916,6 +970,37 @@ public class Element {
         }
 
         return ret
+    }
+
+    public func waitUntilElement(_ attrs: [String: Any], timeout: Int = 10) -> Element? {
+        var count = 0
+        while true {
+            if count >= timeout {
+                return nil
+            }
+            count += 1
+            guard let e = self.findElement(attrs) else {
+                sleep(1)
+                continue
+            }
+            return e
+        }
+    }
+
+    public func waitUntil(timeout: Int = 10, _ condition: ()-> Any?) -> Any? {
+        var count = 0
+        while true {
+            if count >= timeout {
+                return nil
+            }
+            count += 1
+
+            guard let e = condition() else {
+                sleep(1)
+                continue
+            }
+            return e
+        }
     }
 
     public func toDict(unique: inout Set<AXUIElement>) -> Any {
