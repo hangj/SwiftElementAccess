@@ -1026,7 +1026,7 @@ public class Element {
         }
     }
 
-    public func waitUntil(timeout: Int = 10, _ condition: ()-> Any?) -> Any? {
+    public func waitUntil(timeout: Int = 10, _ condition: ()-> Element?) -> Element? {
         var count = 0
         while true {
             if count >= timeout {
