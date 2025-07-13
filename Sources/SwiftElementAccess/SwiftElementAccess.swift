@@ -566,7 +566,7 @@ public class Element {
             while !self.isAppFrontMost {
                 let e = AXUIElementSetAttributeValue(self.ele, kAXFrontmostAttribute as CFString, true as CFTypeRef)
                 if e != .success {
-                    print("setAppFrontmost failed.")
+                    print("setAppFrontmost failed:", e)
                     break
                 }
                 sleep(1)
@@ -592,7 +592,7 @@ public class Element {
             while !self.isWindowFrontMost {
                 let e = AXUIElementSetAttributeValue(self.ele, kAXMainAttribute as CFString, true as CFTypeRef)
                 if e != .success {
-                    print("setWindowFrontmost failed.")
+                    print("setWindowFrontmost failed:", e)
                     break
                 }
                 sleep(1)
