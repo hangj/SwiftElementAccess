@@ -563,10 +563,42 @@ public class Element {
     public func setAppFrontmost() {
         if self.isApplicationUIElement {
             self.activate()
-            AXUIElementSetAttributeValue(self.ele, kAXFrontmostAttribute as CFString, true as CFTypeRef)
-            sleep(1)
+            while !self.isAppFrontMost {
+                let e = AXUIElementSetAttributeValue(self.ele, kAXFrontmostAttribute as CFString, true as CFTypeRef)
+                if e != .success {
+                    print("setAppFrontmost failed.")
+                    break
+                }
+                sleep(1)
+            }
         } else {
             Element(fromPid: self.pid).setAppFrontmost()
+        }
+    }
+
+    public var isWindowFrontMost: Bool {
+        if self.isWindowUIElement {
+            if let b: Bool = self.valueOfAttr(kAXMainAttribute) {
+                return b
+            }
+            return false
+        } else {
+            return self.mainWindow?.isAppFrontMost ?? false
+        }
+    }
+
+    public func setWindowFrontmost() {
+        if self.isWindowUIElement {
+            while !self.isWindowFrontMost {
+                let e = AXUIElementSetAttributeValue(self.ele, kAXMainAttribute as CFString, true as CFTypeRef)
+                if e != .success {
+                    print("setWindowFrontmost failed.")
+                    break
+                }
+                sleep(1)
+            }
+        } else {
+            self.mainWindow?.setWindowFrontmost()
         }
     }
 
@@ -716,6 +748,13 @@ public class Element {
     public var isEnabled: Bool {
         if let enable: Bool = self.valueOfAttr(kAXEnabledAttribute) {
             return enable
+        }
+        return false
+    }
+
+    public var isSelected: Bool {
+        if let selected: Bool = self.valueOfAttr(kAXSelectedAttribute) {
+            return selected
         }
         return false
     }
