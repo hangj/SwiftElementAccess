@@ -1042,6 +1042,22 @@ public class Element {
         }
     }
 
+    public func waitUntil(timeoutInSeconds: Int=10, _ condition: ()-> Bool) -> Bool {
+        var count = 0
+        while true {
+            if count >= timeoutInSeconds {
+                return false
+            }
+            count += 1
+
+            guard condition() else {
+                sleep(1)
+                continue
+            }
+            return true
+        }
+    }
+
     public func toDict(unique: inout Set<AXUIElement>) -> Any {
         if unique.contains(self.ele) {
             return "\(self)"
