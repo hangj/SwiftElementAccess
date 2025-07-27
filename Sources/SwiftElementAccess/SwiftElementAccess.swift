@@ -583,7 +583,7 @@ public class Element {
             }
             return false
         } else {
-            return self.mainWindow?.isAppFrontMost ?? false
+            return self.window?.isAppFrontMost ?? false
         }
     }
 
@@ -598,7 +598,7 @@ public class Element {
                 sleep(1)
             }
         } else {
-            self.mainWindow?.setWindowFrontmost()
+            self.window?.setWindowFrontmost()
         }
     }
 
