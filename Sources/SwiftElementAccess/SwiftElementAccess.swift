@@ -1119,4 +1119,93 @@ public class Element {
             }
         }
     }
+
+    public func take_screenshot() -> CGImage? {
+        guard let frame = self.frame else {
+            print("Element frame is nil")
+            return nil
+        }
+        guard let win_frame = self.window?.frame else {
+            print("Window frame is nil")
+            return nil
+        }
+        // https://stackoverflow.com/questions/30336740/how-to-get-window-list-from-core-grapics-api-with-swift
+        guard let info = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as? [[ String : Any]] else {
+            return nil
+        }
+
+        for dict in info {
+            let window_number = dict[kCGWindowNumber as String] as? Int ?? 0
+            let owner_pid = dict[kCGWindowOwnerPID as String] as? Int ?? 0
+            // let owner_name = dict[kCGWindowOwnerName as String] as? String ?? "Unknown"
+            let window_name = dict[kCGWindowName as String] as? String ?? "Unknown"
+            let window_bounds = dict[kCGWindowBounds as String] as? [String: CGFloat] ?? [:]
+
+            if self.pid != owner_pid || self.window?.title != window_name {
+                continue
+            }
+            let x = window_bounds["X"] ?? 0
+            let y = window_bounds["Y"] ?? 0
+            let width = window_bounds["Width"] ?? 0
+            let height = window_bounds["Height"] ?? 0
+            if x != win_frame.origin.x || y != win_frame.origin.y || width != win_frame.size.width || height != win_frame.size.height {
+                print("Window frame does not match element frame")
+                print("window bounds:", window_bounds)
+                print("win_frame of ele:", win_frame)
+                continue
+            }
+
+            let image = CGWindowListCreateImage(
+                frame,
+                .optionIncludingWindow, 
+                CGWindowID(window_number), 
+                [.boundsIgnoreFraming, .bestResolution]
+            )
+
+            return image
+
+            // guard let cgImage = image else {
+            //     print("Failed to create CGImage for window \(window_number)")
+            //     break
+            // }
+
+            // let img = CIImage(cgImage: cgImage)
+
+            // let context = CIContext(options: nil)
+            // let url = URL(fileURLWithPath: String(format: "/tmp/screenshot_%d.png", window_number))
+            // try? context.writePNGRepresentation(of: img, to: url, format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
+
+            // // take a screenshot of the window
+            // // `/usr/sbin/screencapture -l <window_number> image.png`
+            // Process.launchedProcess(
+            //     launchPath: "/usr/sbin/screencapture",
+            //     arguments: ["-l", "\(window_number)", url.path]
+            // ).waitUntilExit()
+
+            // return url
+        }
+        return nil
+    }
+
+    public func scan_qrcodes() -> [String]? {
+        guard let detector = CIDetector(
+            ofType: CIDetectorTypeQRCode,
+            context: nil,
+            options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]
+        ) else {
+            print("Detector not intialized")
+            return nil
+        }
+
+        guard let cgimg = self.take_screenshot() else {
+            return nil
+        }
+
+        let img = CIImage(cgImage: cgimg)
+
+        let features = detector.features(in: img)
+        let qrCodes = features.compactMap { $0 as? CIQRCodeFeature }.compactMap { $0.messageString }
+
+        return qrCodes
+    }
 }
