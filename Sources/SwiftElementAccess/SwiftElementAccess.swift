@@ -477,6 +477,10 @@ public class Element {
     }
 
     public func watch(_ notification: String) {
+        if self.notifications.contains(notification) {
+            return
+        }
+
         let pid = self.pid
 
         var obs = Self.observers[pid];
@@ -824,6 +828,17 @@ public class Element {
         return []
     }
 
+    public var visibleChildren: [Element] {
+        var value : AnyObject?
+        let err = AXUIElementCopyAttributeValue(self.ele, kAXVisibleChildrenAttribute as CFString, &value)
+        if err == .success {
+            if let arr = value as? [AXUIElement] {
+                return arr.map { Element($0) }
+            }
+        }
+        return []
+    }
+
     public var contents: [Element] {
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self.ele, kAXContentsAttribute as CFString, &value)
@@ -917,6 +932,17 @@ public class Element {
                 if CFGetTypeID(v) == AXUIElementGetTypeID() {
                     return Element(v as! AXUIElement)
                 }
+            }
+        }
+        return nil
+    }
+
+    public var hidden: Bool? {
+        var value: AnyObject?
+        let err = AXUIElementCopyAttributeValue(self.ele, kAXHiddenAttribute as CFString, &value)
+        if err == .success {
+            if let v = value {
+                return v as? Bool
             }
         }
         return nil
