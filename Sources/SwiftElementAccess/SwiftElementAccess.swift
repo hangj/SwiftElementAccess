@@ -405,6 +405,7 @@ public class Element {
         return NSRunningApplication(processIdentifier: pid)?.isTerminated ?? true
     }
 
+    /// Only valid from Dock
     public var isApplicationRunning: Bool {
         if let s: Bool = self.valueOfAttr(kAXIsApplicationRunningAttribute) {
             return s
