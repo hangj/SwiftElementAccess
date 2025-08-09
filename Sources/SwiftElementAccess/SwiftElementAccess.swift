@@ -1163,6 +1163,15 @@ public class Element {
             print("Element frame is nil")
             return nil
         }
+        if let winId = self.getWindowId() {
+            return CGWindowListCreateImage(
+                frame,
+                .optionIncludingWindow,
+                winId,
+                [.boundsIgnoreFraming, .bestResolution]
+            )
+        }
+
         guard let win_frame = self.window?.frame else {
             print("Window frame is nil")
             return nil
@@ -1178,8 +1187,6 @@ public class Element {
             // let owner_name = dict[kCGWindowOwnerName as String] as? String ?? "Unknown"
             let window_name = dict[kCGWindowName as String] as? String ?? "Unknown"
             let window_bounds = dict[kCGWindowBounds as String] as? [String: CGFloat] ?? [:]
-
-            if self.getWindowId() != window_number { continue }
 
             if self.pid != owner_pid || self.window?.title != window_name {
                 continue
@@ -1197,8 +1204,8 @@ public class Element {
 
             let image = CGWindowListCreateImage(
                 frame,
-                .optionIncludingWindow, 
-                CGWindowID(window_number), 
+                .optionIncludingWindow,
+                window_number,
                 [.boundsIgnoreFraming, .bestResolution]
             )
 
