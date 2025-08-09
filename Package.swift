@@ -19,8 +19,13 @@ let package = Package(
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
         // Targets can depend on other targets in this package, and on products in packages this package depends on.
         .target(
+            name: "MyObjCTarget", // Target for Objective-C/C/C++ code
+            path: "Sources/MyObjCTarget", // Directory for Objective-C/C/C++ files
+            publicHeadersPath: "include"
+        ),
+        .target(
             name: "SwiftElementAccess",
-            dependencies: []),
+            dependencies: ["MyObjCTarget"]),
         .testTarget(
             name: "SwiftElementAccessTests",
             dependencies: ["SwiftElementAccess"]),

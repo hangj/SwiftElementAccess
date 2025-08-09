@@ -1,4 +1,5 @@
 import Cocoa
+import MyObjCTarget
 
 // public struct SwiftElementAccess {
 //     public private(set) var text = "Hello, World!"
@@ -862,6 +863,7 @@ public class Element {
     }
 
     public var window: Element? {
+        if self.isWindowUIElement { return self }
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self.ele, kAXWindowAttribute as CFString, &value)
         if err == .success {
@@ -1147,6 +1149,15 @@ public class Element {
         }
     }
 
+    func getWindowId() -> CGWindowID? {
+        guard let win = self.window else {return nil}
+
+        var windowId = CGWindowID(0)
+        let result = _AXUIElementGetWindow(win.ele, &windowId)
+        guard result == .success else { return nil }
+        return windowId
+    }
+
     public func take_screenshot() -> CGImage? {
         guard let frame = self.frame else {
             print("Element frame is nil")
@@ -1162,11 +1173,13 @@ public class Element {
         }
 
         for dict in info {
-            let window_number = dict[kCGWindowNumber as String] as? Int ?? 0
-            let owner_pid = dict[kCGWindowOwnerPID as String] as? Int ?? 0
+            let window_number = dict[kCGWindowNumber as String] as? UInt32 ?? 0
+            let owner_pid = dict[kCGWindowOwnerPID as String] as? pid_t ?? 0
             // let owner_name = dict[kCGWindowOwnerName as String] as? String ?? "Unknown"
             let window_name = dict[kCGWindowName as String] as? String ?? "Unknown"
             let window_bounds = dict[kCGWindowBounds as String] as? [String: CGFloat] ?? [:]
+
+            if self.getWindowId() != window_number { continue }
 
             if self.pid != owner_pid || self.window?.title != window_name {
                 continue
