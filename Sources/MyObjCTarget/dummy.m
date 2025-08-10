@@ -1,1 +1,2 @@
 // If not provide this dummy.m file, swift5.5 won't compile
+static void dummy(){}
