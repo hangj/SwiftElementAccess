@@ -398,24 +398,44 @@ extension AXUIElement {
 
     /// top-left corner of the element
     public var position: CGPoint? {
-        // Value: An AXValueRef with type kAXValueCGPointType
-        if let v: AXValue = self.valueOfAttr(kAXPositionAttribute) {
-            var pos = CGPoint()
-            AXValueGetValue(v, AXValueGetType(v), &pos)
-            return pos
+        get {
+            // Value: An AXValueRef with type kAXValueCGPointType
+            if let v: AXValue = self.valueOfAttr(kAXPositionAttribute) {
+                var pos = CGPoint()
+                AXValueGetValue(v, AXValueGetType(v), &pos)
+                return pos
+            }
+            return nil
         }
-        return nil
+        set(pos){
+            guard var pos = pos else { return }
+            let ref = AXValueCreate(.cgPoint, &pos)
+            let e = AXUIElementSetAttributeValue(self, kAXPositionAttribute as CFString, ref as CFTypeRef)
+            if e != .success {
+                print("set position failed:", e)
+            }
+        }
     }   
 
     /// The vertical and horizontal dimensions of the element
     public var size: CGSize? {
-        // Value: An AXValueRef with type kAXValueCGSizeType. Units are points.
-        if let v: AXValue = self.valueOfAttr(kAXSizeAttribute) {
-            var size = CGSize()
-            AXValueGetValue(v, AXValueGetType(v), &size)
-            return size
+        get {
+            // Value: An AXValueRef with type kAXValueCGSizeType. Units are points.
+            if let v: AXValue = self.valueOfAttr(kAXSizeAttribute) {
+                var size = CGSize()
+                AXValueGetValue(v, AXValueGetType(v), &size)
+                return size
+            }
+            return nil
         }
-        return nil
+        set(sz) {
+            guard var sz = sz else { return }
+            let ref = AXValueCreate(.cgSize, &sz)
+            let e = AXUIElementSetAttributeValue(self, kAXSizeAttribute as CFString, ref as CFTypeRef)
+            if e != .success {
+                print("set size failed:", e)
+            }
+        }
     }
 
     public var frame: CGRect? {
