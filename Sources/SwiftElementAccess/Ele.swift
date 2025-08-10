@@ -2,31 +2,26 @@ import Cocoa
 import MyObjCTarget
 
 extension AXUIElement {
+    public typealias Callback = (_ notification: String, _ element: AXUIElement)->Void
     static let systemRef = AXUIElementCreateSystemWide()
     static var observers: [pid_t: AXObserver] = [:]
+    static var notificationCallbacks: [AXUIElement: Callback] = [:]
+    static var notifications: [AXUIElement: [String]] = [:]
+
+    static private func observerCallback(_ observer:AXObserver, _ element:AXUIElement, _ notification:CFString, _ userData:UnsafeMutableRawPointer?) -> Void {
+        guard let userData = userData else { return }
+        let ele = Unmanaged<AXUIElement>.fromOpaque(userData).takeUnretainedValue()
+
+        if let cb = notificationCallbacks[ele] {
+            cb(notification as String, element)
+        }
+    }
 
     public static func fromPid(_ pid: pid_t) -> AXUIElement {
         let kAXManualAccessibility = "AXManualAccessibility" as CFString;
         let e = AXUIElementCreateApplication(pid)
         AXUIElementSetAttributeValue(e, kAXManualAccessibility, kCFBooleanTrue)
         return e
-    }
-
-    public var isAppTerminated: Bool {
-        let pid = self.pid
-        if pid < 0 {
-            return true
-        }
-        // NSRunningApplication(processIdentifier: pid)?.isActive
-        return NSRunningApplication(processIdentifier: pid)?.isTerminated ?? true
-    }
-
-    /// Only valid from Dock
-    public var isApplicationRunning: Bool {
-        if let s: Bool = self.valueOfAttr(kAXIsApplicationRunningAttribute) {
-            return s
-        }
-        return false
     }
 
     /// ```
@@ -84,6 +79,94 @@ extension AXUIElement {
         return nil
     }
 
+
+    // -----------
+
+    private func createObserver() -> AXObserver? {
+        if let obs = Self.observers[self.pid] {
+            return obs
+        }
+
+        var obs: AXObserver?
+        let e = AXObserverCreate(pid, {AXUIElement.observerCallback($0, $1, $2, $3)}, &obs)
+        if e == .success {
+            CFRunLoopAddSource(RunLoop.current.getCFRunLoop(), AXObserverGetRunLoopSource(obs!), .defaultMode)
+            Self.observers[pid] = obs!
+            return obs
+        }
+        print("AXObserverCreate error:", e)
+        return nil
+    }
+
+    public func setNotificationCallback(_ callback: @escaping Callback) {
+        Self.notificationCallbacks[self] = callback
+    }
+
+    public func watch(_ notification: String) {
+        if Self.notifications[self] == nil {
+            Self.notifications[self] = []
+        }
+
+        if Self.notifications[self]!.contains(notification) {
+            return
+        }
+
+        guard let obs = createObserver() else {return}
+
+        let selfPtr = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+        let e = AXObserverAddNotification(obs, self, notification as CFString, selfPtr)
+        if e == .success || e == .notificationAlreadyRegistered {
+            Self.notifications[self]!.append(notification)
+        }
+    }
+
+    public func unWatch(_ notification: String) {
+        if Self.notifications[self] == nil { return }
+        if !Self.notifications[self]!.contains(notification) { return }
+        Self.notifications[self]!.removeAll { $0 == notification }
+        guard let obs = createObserver() else {return}
+        AXObserverRemoveNotification(obs, self, notification as CFString)
+    }
+
+    public static let allNotifications = [
+        kAXMainWindowChangedNotification, kAXFocusedWindowChangedNotification, kAXFocusedUIElementChangedNotification,
+        kAXApplicationActivatedNotification, kAXApplicationDeactivatedNotification, kAXApplicationHiddenNotification,
+        kAXApplicationShownNotification, kAXWindowCreatedNotification, kAXWindowMovedNotification, kAXWindowResizedNotification,
+        kAXWindowMiniaturizedNotification, kAXWindowDeminiaturizedNotification, kAXDrawerCreatedNotification,
+        kAXSheetCreatedNotification, kAXHelpTagCreatedNotification, kAXValueChangedNotification,
+        kAXUIElementDestroyedNotification, kAXElementBusyChangedNotification, kAXMenuOpenedNotification,
+        kAXMenuClosedNotification, kAXMenuItemSelectedNotification, kAXRowCountChangedNotification,
+        kAXRowExpandedNotification, kAXRowCollapsedNotification, kAXSelectedCellsChangedNotification,
+        kAXUnitsChangedNotification, kAXSelectedChildrenMovedNotification, kAXSelectedChildrenChangedNotification,
+        kAXResizedNotification, kAXMovedNotification, kAXCreatedNotification, kAXSelectedRowsChangedNotification,
+        kAXSelectedColumnsChangedNotification, kAXSelectedTextChangedNotification, kAXTitleChangedNotification,
+        kAXLayoutChangedNotification, kAXAnnouncementRequestedNotification,
+    ]
+
+    public func watchAll() {
+        Self.allNotifications.forEach { watch($0) }
+    }
+
+    public func unWatchAll() {
+        Self.allNotifications.forEach { unWatch($0) }
+    }
+
+    public var isAppTerminated: Bool {
+        let pid = self.pid
+        if pid < 0 {
+            return true
+        }
+        // NSRunningApplication(processIdentifier: pid)?.isActive
+        return NSRunningApplication(processIdentifier: pid)?.isTerminated ?? true
+    }
+
+    /// Only valid from Dock
+    public var isApplicationRunning: Bool {
+        if let s: Bool = self.valueOfAttr(kAXIsApplicationRunningAttribute) {
+            return s
+        }
+        return false
+    }
 
     public func activate() {
         if let app = NSRunningApplication(processIdentifier: self.pid) {
@@ -553,13 +636,13 @@ extension AXUIElement {
         }
     }
 
-    func getWindowId() -> CGWindowID? {
+    public var windowId: CGWindowID? {
         guard let win = self.window else {return nil}
 
-        var windowId = CGWindowID(0)
-        let result = _AXUIElementGetWindow(win, &windowId)
+        var winId = CGWindowID(0)
+        let result = _AXUIElementGetWindow(win, &winId)
         guard result == .success else { return nil }
-        return windowId
+        return winId
     }
 
     public func take_screenshot() -> CGImage? {
@@ -567,7 +650,7 @@ extension AXUIElement {
             print("Element frame is nil")
             return nil
         }
-        if let winId = self.getWindowId() {
+        if let winId = windowId {
             return CGWindowListCreateImage(
                 frame,
                 .optionIncludingWindow,

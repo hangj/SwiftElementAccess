@@ -345,15 +345,6 @@ extension Element: CustomStringConvertible {
 }
 
 
-func observerCallback(_ observer:AXObserver, _ element:AXUIElement, _ notification:CFString, _ userData:UnsafeMutableRawPointer?) -> Void {
-    guard let userData = userData else { return }
-    let ele = Unmanaged<Element>.fromOpaque(userData).takeUnretainedValue()
-
-    if let cb = ele.notificationCallback {
-        cb(notification as String, Element(element))
-    }
-}
-
 // This is the main class to access UI elements in macOS.
 // It provides methods to find elements by process name, bundle identifier, position, etc.
 // It also allows you to set up observers for various notifications related to UI elements.
@@ -366,6 +357,15 @@ public class Element {
     let ele: AXUIElement
     var notificationCallback: Callback? = nil
     var notifications: [String] = []
+
+    static private func observerCallback(_ observer:AXObserver, _ element:AXUIElement, _ notification:CFString, _ userData:UnsafeMutableRawPointer?) -> Void {
+        guard let userData = userData else { return }
+        let ele = Unmanaged<Element>.fromOpaque(userData).takeUnretainedValue()
+
+        if let cb = ele.notificationCallback {
+            cb(notification as String, Element(element))
+        }
+    }
 
     init(_ ele: AXUIElement) {
         self.ele = ele
@@ -380,7 +380,8 @@ public class Element {
 
     deinit {
         if self.isAppTerminated {
-            if let _ = Self.observers.removeValue(forKey: pid) {
+            if let obs = Self.observers.removeValue(forKey: pid) {
+                CFRunLoopRemoveSource(RunLoop.current.getCFRunLoop(), AXObserverGetRunLoopSource(obs), .defaultMode)
                 print("removed observer for pid:", pid)
             }
             return
@@ -487,10 +488,10 @@ public class Element {
         var obs = Self.observers[pid];
 
         if obs == nil {
-            let e = AXObserverCreate(pid, observerCallback, &obs)
+            let e = AXObserverCreate(pid, {Element.observerCallback($0, $1, $2, $3)}, &obs)
             if e == .success {
                 Self.observers[pid] = obs!
-                CFRunLoopAddSource(RunLoop.current.getCFRunLoop(), AXObserverGetRunLoopSource(obs!), CFRunLoopMode.defaultMode)
+                CFRunLoopAddSource(RunLoop.current.getCFRunLoop(), AXObserverGetRunLoopSource(obs!), .defaultMode)
             } else {
                 print("AXObserverCreate error:", e)
                 return
@@ -1149,13 +1150,13 @@ public class Element {
         }
     }
 
-    func getWindowId() -> CGWindowID? {
+    public var windowId: CGWindowID? {
         guard let win = self.window else {return nil}
 
-        var windowId = CGWindowID(0)
-        let result = _AXUIElementGetWindow(win.ele, &windowId)
+        var winId = CGWindowID(0)
+        let result = _AXUIElementGetWindow(win.ele, &winId)
         guard result == .success else { return nil }
-        return windowId
+        return winId
     }
 
     public func take_screenshot() -> CGImage? {
@@ -1163,7 +1164,7 @@ public class Element {
             print("Element frame is nil")
             return nil
         }
-        if let winId = self.getWindowId() {
+        if let winId = windowId {
             return CGWindowListCreateImage(
                 frame,
                 .optionIncludingWindow,
