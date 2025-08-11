@@ -1,6 +1,156 @@
 import Cocoa
 import MyObjCTarget
 
+private func carbonScreenPointFromCocoaScreenPoint(_ point : NSPoint) -> CGPoint? {
+    var foundScreen: NSScreen?
+    for screen in NSScreen.screens {
+        if NSPointInRect(point, screen.frame) {
+            foundScreen = screen
+            break
+        }
+    }
+    if let screen = foundScreen {
+        let height = screen.frame.size.height
+        return CGPoint(x: point.x, y: height - point.y - 1)
+    }
+
+    return nil
+}
+
+private func stringFromAttrValue(_ value: AnyObject) -> String {
+    let cfType = CFGetTypeID(value)
+    if cfType == AXValueGetTypeID() {
+        let v = value as! AXValue
+        let type = AXValueGetType(v)
+
+        switch type {
+            case .axError: 
+                var err = AXError.success
+                AXValueGetValue(v, type, &err)
+                return "\(err)"
+            case .cfRange:
+                var range = CFRange()
+                AXValueGetValue(v, type, &range)
+                return "CFRange\(range)"
+            case .cgPoint:
+                var point = CGPoint()
+                AXValueGetValue(v, type, &point)
+                return "CGPoint\(point)"
+            case .cgRect:
+                var rect = CGRect()
+                AXValueGetValue(v, type, &rect)
+                return "CGRect\(rect)"
+            case .cgSize:
+                var size = CGSize()
+                AXValueGetValue(v, type, &size)
+                return "CGSize\(size)"
+            case .illegal:
+                return "illegal"
+            @unknown default:
+                return "unknown"
+        }
+    } else if cfType == AXUIElementGetTypeID() {
+        let ele = value as! AXUIElement
+        return ele.toString()
+    } else {
+        // var s = CFCopyTypeIDDescription(cfType)
+        // s = CFCopyDescription(value)
+
+        if cfType == CFStringGetTypeID() {
+            return value as! String
+        }
+        if cfType == CFNumberGetTypeID() {
+            let v = value as! NSNumber
+            return "\(v)"
+        }
+        if cfType == CFBooleanGetTypeID() {
+            let b = value as! Bool
+            return "\(b)"
+        }
+        if cfType == CFNullGetTypeID() {
+            return "nil"
+        }
+        if cfType == CFArrayGetTypeID() {
+            let arr = value as! [AnyObject]
+            return "\(arr)"
+        }
+        if cfType == CFDictionaryGetTypeID() {
+            let dict = value as! [String: AnyObject]
+            return "\(dict)"
+        }
+    }
+
+    return "Unknown cfType: \(cfType)"
+}
+
+/// return dict/array/string/number
+private func attrValueToJson(_ value: AnyObject, unique: inout Set<AXUIElement>) -> Any {
+    let cfType = CFGetTypeID(value)
+    if cfType == AXValueGetTypeID() {
+        let v = value as! AXValue
+        let type = AXValueGetType(v)
+
+        switch type {
+            case .axError: 
+                var err = AXError.success
+                AXValueGetValue(v, type, &err)
+                return "\(err)"
+            case .cfRange:
+                var range = CFRange()
+                AXValueGetValue(v, type, &range)
+                return ["type": "CFRange", "location": range.location, "length": range.length]
+            case .cgPoint:
+                var point = CGPoint()
+                AXValueGetValue(v, type, &point)
+                return ["type": "CGPoint", "x": point.x, "y": point.y]
+            case .cgRect:
+                var rect = CGRect()
+                AXValueGetValue(v, type, &rect)
+                return ["type": "CGRect", "origin": ["x": rect.origin.x, "y": rect.origin.y], "size": ["height": rect.size.height, "width": rect.size.width]]
+            case .cgSize:
+                var size = CGSize()
+                AXValueGetValue(v, type, &size)
+                return ["type": "CGSize", "height": size.height, "width": size.width]
+            case .illegal:
+                return "illegal"
+            @unknown default:
+                return "unknown"
+        }
+    } else if cfType == AXUIElementGetTypeID() {
+        let ele = value as! AXUIElement
+        return ele.toDict(unique: &unique)
+    } else {
+        if cfType == CFStringGetTypeID() {
+            return value as! String
+        }
+        if cfType == CFNumberGetTypeID() {
+            let v = value as! NSNumber
+            return v
+        }
+        if cfType == CFBooleanGetTypeID() {
+            let b = value as! Bool
+            return b
+        }
+        if cfType == CFNullGetTypeID() {
+            return "nil"
+        }
+        if cfType == CFArrayGetTypeID() {
+            let arr = value as! [AnyObject]
+            return arr.map { attrValueToJson($0, unique: &unique) } //.joined(separator: ",")
+        }
+        if cfType == CFDictionaryGetTypeID() {
+            let dict = value as! [String: AnyObject]
+            return dict.mapValues { attrValueToJson($0, unique: &unique) }
+        }
+    }
+
+    // var s = CFCopyTypeIDDescription(cfType)!
+    // return s
+    // s = CFCopyDescription(value)
+
+    return "Unknown cfType: \(cfType)."
+}
+
 extension AXUIElement {
     public typealias Callback = (_ notification: String, _ element: AXUIElement)->Void
     static let systemRef = AXUIElementCreateSystemWide()
@@ -165,7 +315,7 @@ extension AXUIElement {
         }
 
         if let v: AnyObject = self.value() {
-            let s = stringFromAXValue(v)
+            let s = stringFromAttrValue(v)
             if !s.isEmpty {
                 txtInfo += "value: \(s),"
             }
@@ -178,8 +328,6 @@ extension AXUIElement {
         let hash = "hashValue: \(self.hashValue)"
         return "AXUIElement(role: \(role), pid: \(pid), \(txtInfo) enabled: \(self.isEnabled), \(frame)) \(hash)"
     }
-
-    public func toJson() {}
 
     public func findElement(_ filter: (AXUIElement)->Bool) -> AXUIElement? {
         if filter(self) {
@@ -526,6 +674,17 @@ extension AXUIElement {
         return []
     }
 
+    public var selectedChildren: [AXUIElement] {
+        var value : AnyObject?
+        let err = AXUIElementCopyAttributeValue(self, kAXSelectedChildrenAttribute as CFString, &value)
+        if err == .success {
+            if let arr = value as? [AXUIElement] {
+                return arr
+            }
+        }
+        return []
+    }
+
     public var contents: [AXUIElement] {
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self, kAXContentsAttribute as CFString, &value)
@@ -644,18 +803,33 @@ extension AXUIElement {
 
         var dict: [String: Any] = [:]
         for attr in self.attrNames {
-            if attr != kAXChildrenAttribute {
-                if let v: AnyObject = self.valueOfAttr(attr) {
-                    if attr == kAXParentAttribute {
-                        dict[attr] = stringFromAXValue(v)
-                    } else {
-                        dict[attr] = axValueToJsonValue(v, unique: &unique)
-                    }
-                }
-            } else {
+            if attr == kAXChildrenAttribute {
                 let children = self.children
                 if !children.isEmpty {
                     dict[attr] = children.map { $0.toDict(unique: &unique) }
+                }
+                continue
+            }
+            if attr == kAXVisibleChildrenAttribute {
+                let children = self.visibleChildren
+                if !children.isEmpty {
+                    dict[attr] = children.map { $0.toDict(unique: &unique) }
+                }
+                continue
+            }
+            if attr == kAXSelectedChildrenAttribute {
+                let children = self.selectedChildren
+                if !children.isEmpty {
+                    dict[attr] = children.map { $0.toDict(unique: &unique) }
+                }
+                continue
+            }
+
+            if let v: AnyObject = self.valueOfAttr(attr) {
+                if attr == kAXParentAttribute {
+                    dict[attr] = stringFromAttrValue(v)
+                } else {
+                    dict[attr] = attrValueToJson(v, unique: &unique)
                 }
             }
         }
@@ -672,10 +846,8 @@ extension AXUIElement {
         var unique: Set<AXUIElement> = []
         let dict = self.toDict(unique: &unique)
         // print("dict: \(dict)")
-        // self.checkJsonObj(dict)
-        if !JSONSerialization.isValidJSONObject(dict) {
-            print("this dict is not valid JSON")
-        }
+
+        assert(JSONSerialization.isValidJSONObject(dict))
 
         let jsonData = try! JSONSerialization.data(withJSONObject: dict) // options: .prettyPrinted
         return String(data: jsonData, encoding: .utf8) ?? ""
@@ -684,7 +856,7 @@ extension AXUIElement {
     public func printAttrs() {
         for attr in self.attrNames {
             if let v: AnyObject = self.valueOfAttr(attr) {
-                let s = stringFromAXValue(v)
+                let s = stringFromAttrValue(v)
                 print("\(attr): \(s)")
             }
         }
