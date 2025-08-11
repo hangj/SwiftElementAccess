@@ -98,7 +98,7 @@ extension Queue: CustomStringConvertible {
 }
 
 
-func stringFromAXValue(_ value: AnyObject) -> String {
+private func stringFromAXValue(_ value: AnyObject) -> String {
     if value is Element {
         print("value is Element")
         let ele = value as! Element
@@ -171,7 +171,7 @@ func stringFromAXValue(_ value: AnyObject) -> String {
 }
 
 /// return dict/array/string/number
-func axValueToJsonValue(_ value: AnyObject, unique: inout Set<AXUIElement>) -> Any {
+private func axValueToJsonValue(_ value: AnyObject, unique: inout Set<AXUIElement>) -> Any {
     if value is Element {
         print("value is Element")
         let ele = value as! Element
@@ -291,7 +291,7 @@ extension AXError: CustomStringConvertible {
   }
 }
 
-func carbonScreenPointFromCocoaScreenPoint(_ point : NSPoint) -> CGPoint? {
+private func carbonScreenPointFromCocoaScreenPoint(_ point : NSPoint) -> CGPoint? {
     var foundScreen: NSScreen?
     for screen in NSScreen.screens {
         if NSPointInRect(point, screen.frame) {

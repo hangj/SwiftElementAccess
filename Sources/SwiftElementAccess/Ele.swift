@@ -151,6 +151,48 @@ extension AXUIElement {
         Self.allNotifications.forEach { unWatch($0) }
     }
 
+    public func toString() -> String {
+        var txtInfo = ""
+
+        if !title.isEmpty {
+            txtInfo += "title: \(title),"
+        }
+        if !label.isEmpty {
+            txtInfo += "label: \(label),"
+        }
+        if !desc.isEmpty {
+            txtInfo += "description: \(desc),"
+        }
+
+        if let v: AnyObject = self.value() {
+            let s = stringFromAXValue(v)
+            if !s.isEmpty {
+                txtInfo += "value: \(s),"
+            }
+        }
+
+        var frame = ""
+        if let frm = self.frame {
+            frame = "frame: \(frm)"
+        }
+        let hash = "hashValue: \(self.hashValue)"
+        return "AXUIElement(role: \(role), pid: \(pid), \(txtInfo) enabled: \(self.isEnabled), \(frame)) \(hash)"
+    }
+
+    public func toJson() {}
+
+    public func findElement(_ filter: (AXUIElement)->Bool) -> AXUIElement? {
+        if filter(self) {
+            return self
+        }
+        for ch in self.children {
+            if let e = ch.findElement(filter) {
+                return e
+            }
+        }
+        return nil
+    }
+
     public var isAppTerminated: Bool {
         let pid = self.pid
         if pid < 0 {
