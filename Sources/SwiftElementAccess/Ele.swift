@@ -305,13 +305,13 @@ extension AXUIElement {
         var txtInfo = ""
 
         if !title.isEmpty {
-            txtInfo += "title: \(title),"
+            txtInfo += "title: \"\(title)\","
         }
         if !label.isEmpty {
-            txtInfo += "label: \(label),"
+            txtInfo += "label: \"\(label)\","
         }
         if !desc.isEmpty {
-            txtInfo += "description: \(desc),"
+            txtInfo += "description: \"\(desc)\","
         }
 
         if let v: AnyObject = self.value() {
@@ -326,7 +326,7 @@ extension AXUIElement {
             frame = "frame: \(frm)"
         }
         let hash = "hashValue: \(self.hashValue)"
-        return "AXUIElement(role: \(role), pid: \(pid), \(txtInfo) enabled: \(self.isEnabled), \(frame)) \(hash)"
+        return "AXUIElement(role: \"\(role)\", pid: \(pid), \(txtInfo) enabled: \(self.isEnabled), \(frame), \(hash))"
     }
 
     public func findElement(_ filter: (AXUIElement)->Bool) -> AXUIElement? {
@@ -471,9 +471,9 @@ extension AXUIElement {
         return nil
     }
 
-    public func canSetAttr(_ name: String) -> Bool {
+    public func canSet(attr: String) -> Bool {
         var value : DarwinBoolean = false // https://stackoverflow.com/questions/33667321/what-is-darwinboolean-type-in-swift
-        let err = AXUIElementIsAttributeSettable(self, name as CFString, &value)
+        let err = AXUIElementIsAttributeSettable(self, attr as CFString, &value)
         if err == .success {
             return value.boolValue
         }
