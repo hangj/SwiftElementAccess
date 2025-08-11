@@ -1,6 +1,19 @@
 import Cocoa
 import MyObjCTarget
 
+/// https://stackoverflow.com/a/50901425/1936057
+/// It appears, in 10.13.3 at least, that applications which are using the app sandbox will not have the alert shown. If you turn off app sandbox in the project entitlements then the alert is shown
+public func checkIsProcessTrusted(prompt: Bool = true) -> Bool {
+    if ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil {
+        print("sandbox is enabled.")
+        // print("This app is not trusted to use Accessibility API. Please enable it in System Preferences > Security & Privacy > Privacy > Accessibility")
+        return false
+    }
+    let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+    let opts = [promptKey: prompt] as CFDictionary
+    return AXIsProcessTrustedWithOptions(opts)
+}
+
 private func carbonScreenPointFromCocoaScreenPoint(_ point : NSPoint) -> CGPoint? {
     var foundScreen: NSScreen?
     for screen in NSScreen.screens {
@@ -18,6 +31,9 @@ private func carbonScreenPointFromCocoaScreenPoint(_ point : NSPoint) -> CGPoint
 }
 
 private func stringFromAttrValue(_ value: AnyObject) -> String {
+    if value is String {
+        return value as! String
+    }
     let cfType = CFGetTypeID(value)
     if cfType == AXValueGetTypeID() {
         let v = value as! AXValue
@@ -329,16 +345,31 @@ extension AXUIElement {
         return "AXUIElement(role: \"\(role)\", pid: \(pid), \(txtInfo) enabled: \(self.isEnabled), \(frame), \(hash))"
     }
 
-    public func findElement(_ filter: (AXUIElement)->Bool) -> AXUIElement? {
+    public func findElement(filter: (AXUIElement)->Bool) -> AXUIElement? {
         if filter(self) {
             return self
         }
         for ch in self.children {
-            if let e = ch.findElement(filter) {
+            if let e = ch.findElement(filter: filter) {
                 return e
             }
         }
         return nil
+    }
+
+    public func findElement(attrs: [String: Any]) -> AXUIElement? {
+        return findElement { ele in
+            for (k, v) in attrs {
+                if let value: AnyObject = ele.valueOfAttr(k) {
+                    if stringFromAttrValue(value) != "\(v)" {
+                        return false
+                    }
+                } else {
+                    return false
+                }
+            }
+            return true
+        }
     }
 
     public var isAppTerminated: Bool {

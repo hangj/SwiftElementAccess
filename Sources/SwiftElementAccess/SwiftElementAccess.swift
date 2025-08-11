@@ -14,23 +14,23 @@ import MyObjCTarget
 //     exit(0)
 // }
 
-func isSandboxingEnabled() -> Bool {
-    let environment = ProcessInfo.processInfo.environment
-    return environment["APP_SANDBOX_CONTAINER_ID"] != nil
-}
+// func isSandboxingEnabled() -> Bool {
+//     let environment = ProcessInfo.processInfo.environment
+//     return environment["APP_SANDBOX_CONTAINER_ID"] != nil
+// }
 
-/// https://stackoverflow.com/a/50901425/1936057
-/// It appears, in 10.13.3 at least, that applications which are using the app sandbox will not have the alert shown. If you turn off app sandbox in the project entitlements then the alert is shown
-public func checkIsProcessTrusted(prompt: Bool = false) -> Bool {
-    if isSandboxingEnabled() {
-        print("sandbox is enabled.")
-        // print("This app is not trusted to use Accessibility API. Please enable it in System Preferences > Security & Privacy > Privacy > Accessibility")
-        return false
-    }
-    let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-    let opts = [promptKey: prompt] as CFDictionary
-    return AXIsProcessTrustedWithOptions(opts)
-}
+// /// https://stackoverflow.com/a/50901425/1936057
+// /// It appears, in 10.13.3 at least, that applications which are using the app sandbox will not have the alert shown. If you turn off app sandbox in the project entitlements then the alert is shown
+// public func checkIsProcessTrusted(prompt: Bool = true) -> Bool {
+//     if isSandboxingEnabled() {
+//         print("sandbox is enabled.")
+//         // print("This app is not trusted to use Accessibility API. Please enable it in System Preferences > Security & Privacy > Privacy > Accessibility")
+//         return false
+//     }
+//     let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+//     let opts = [promptKey: prompt] as CFDictionary
+//     return AXIsProcessTrustedWithOptions(opts)
+// }
 
 class Node<T> {
     public let value: T
@@ -103,6 +103,9 @@ private func stringFromAXValue(_ value: AnyObject) -> String {
         print("value is Element")
         let ele = value as! Element
         return "\(ele)"
+    }
+    if value is String {
+        return value as! String
     }
 
     let cfType = CFGetTypeID(value)
@@ -979,8 +982,8 @@ public class Element {
         while let ele = queue.pop_front() {
             var good = true
             for (attr, value) in attrs {
-                if let v: AnyObject? = ele.valueOfAttr(attr) {
-                    let s = stringFromAXValue(v!)
+                if let v: AnyObject = ele.valueOfAttr(attr) {
+                    let s = stringFromAXValue(v)
                     if let regex = try? NSRegularExpression(pattern: "\(value)", options: []) {
                         let arr = regex.matches(in: s, options: [], range: NSMakeRange(0, s.utf16.count))
                         if arr.count == 1 {
