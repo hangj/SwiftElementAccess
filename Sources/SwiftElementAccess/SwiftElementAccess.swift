@@ -741,6 +741,13 @@ public class Element {
         return ""
     }
 
+    public var selectedText: String {
+        if let s: String = self.valueOfAttr(kAXSelectedTextAttribute) {
+            return s
+        }
+        return ""
+    }
+
     public var help: String {
         if let s: String = self.valueOfAttr(kAXHelpAttribute) {
             return s
