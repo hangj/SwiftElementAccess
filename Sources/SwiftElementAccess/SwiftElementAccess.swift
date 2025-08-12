@@ -762,6 +762,21 @@ public class Element {
         return nil
     }
 
+    public func value<T>(type: T.Type) -> T? {
+        if let v: T = self.valueOfAttr(kAXValueAttribute) {
+            return v
+        }
+        return nil
+    }
+
+    public func setValue<T>(_ v: T) -> Bool {
+        let e = AXUIElementSetAttributeValue(self.ele, kAXValueAttribute as CFString, v as CFTypeRef)
+        if e != .success {
+            print("setValue failed:", e)
+        }
+        return e == .success
+    }
+
     public var isEnabled: Bool {
         if let enable: Bool = self.valueOfAttr(kAXEnabledAttribute) {
             return enable

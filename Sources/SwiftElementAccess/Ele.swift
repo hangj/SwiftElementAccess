@@ -582,6 +582,13 @@ extension AXUIElement {
         return ""
     }
 
+    public var selectedText: String {
+        if let s: String = self.valueOfAttr(kAXSelectedTextAttribute) {
+            return s
+        }
+        return ""
+    }
+
     public var help: String {
         if let s: String = self.valueOfAttr(kAXHelpAttribute) {
             return s
@@ -594,6 +601,21 @@ extension AXUIElement {
             return v
         }
         return nil
+    }
+
+    public func value<T>(type: T.Type) -> T? {
+        if let v: T = self.valueOfAttr(kAXValueAttribute) {
+            return v
+        }
+        return nil
+    }
+
+    public func setValue<T>(_ v: T) -> Bool {
+        let e = AXUIElementSetAttributeValue(self, kAXValueAttribute as CFString, v as CFTypeRef)
+        if e != .success {
+            print("setValue failed:", e)
+        }
+        return e == .success
     }
 
     public var isEnabled: Bool {
