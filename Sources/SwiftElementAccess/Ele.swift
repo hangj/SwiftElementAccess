@@ -400,59 +400,60 @@ extension AXUIElement {
         }
     }
 
-    public var isAppFrontMost: Bool {
-        if self.isApplicationUIElement {
-            if let b: Bool = self.valueOfAttr(kAXFrontmostAttribute) {
-                return b
-            }
-            return false
-        } else {
-            return self.appUIElement.isAppFrontMost
-        }
-    }
-
-    public func setAppFrontmost() {
-        if self.isApplicationUIElement {
-            self.activate()
-            while !self.isAppFrontMost {
-                let e = AXUIElementSetAttributeValue(self, kAXFrontmostAttribute as CFString, true as CFTypeRef)
-                if e != .success {
-                    print("setAppFrontmost failed:", e)
-                    break
+    public var isAppFrontmost: Bool {
+        get {
+            if self.isApplicationUIElement {
+                if let b: Bool = self.valueOfAttr(kAXFrontmostAttribute) {
+                    return b
                 }
-                sleep(1)
+                return false
+            } else {
+                return self.appUIElement.isAppFrontmost
             }
-        } else {
-            self.appUIElement.setAppFrontmost()
         }
-    }
-
-    public var isWindowFrontMost: Bool {
-        if self.isWindowUIElement {
-            if let b: Bool = self.valueOfAttr(kAXMainAttribute) {
-                return b
-            }
-            return false
-        } else {
-            return self.window?.isAppFrontMost ?? false
-        }
-    }
-
-    public func setWindowFrontmost() {
-        if self.isWindowUIElement {
-            while !self.isWindowFrontMost {
-                let e = AXUIElementSetAttributeValue(self, kAXMainAttribute as CFString, true as CFTypeRef)
-                if e != .success {
-                    print("setWindowFrontmost failed:", e)
-                    break
+        set(v) {
+            if self.isApplicationUIElement {
+                self.activate()
+                while !self.isAppFrontmost {
+                    let e = AXUIElementSetAttributeValue(self, kAXFrontmostAttribute as CFString, v as CFTypeRef)
+                    if e != .success {
+                        print("setAppFrontmost failed:", e)
+                        break
+                    }
+                    sleep(1)
                 }
-                sleep(1)
+            } else {
+                self.appUIElement.isAppFrontmost = true
             }
-        } else {
-            self.window?.setWindowFrontmost()
         }
     }
 
+    public var isWindowFrontmost: Bool {
+        get {
+            if self.isWindowUIElement {
+                if let b: Bool = self.valueOfAttr(kAXMainAttribute) {
+                    return b
+                }
+                return false
+            } else {
+                return self.window?.isWindowFrontmost ?? false
+            }
+        }
+        set(v) {
+            if self.isWindowUIElement {
+                while !self.isWindowFrontmost {
+                    let e = AXUIElementSetAttributeValue(self, kAXMainAttribute as CFString, v as CFTypeRef)
+                    if e != .success {
+                        print("setWindowFrontmost failed:", e)
+                        break
+                    }
+                    sleep(1)
+                }
+            } else {
+                self.window?.isWindowFrontmost = true
+            }
+        }
+    }
 
     public var pid: pid_t {
         var pid: pid_t = 0
@@ -932,18 +933,24 @@ extension AXUIElement {
         return winId
     }
 
-    public func take_screenshot() -> CGImage? {
+    public func take_screenshot(path: String? = nil) -> CGImage? {
         guard let frame = self.frame else {
             print("Element frame is nil")
             return nil
         }
         if let winId = windowId {
-            return CGWindowListCreateImage(
+            guard let cgImage = CGWindowListCreateImage(
                 frame,
                 .optionIncludingWindow,
                 winId,
                 [.boundsIgnoreFraming, .bestResolution]
-            )
+            ) else { return nil }
+
+            if let path = path {
+                let img = CIImage(cgImage: cgImage)
+                try? CIContext(options: nil).writePNGRepresentation(of: img, to: URL(fileURLWithPath: path), format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
+            }
+            return cgImage
         }
         return nil
     }
