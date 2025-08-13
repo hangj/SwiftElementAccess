@@ -345,19 +345,30 @@ extension AXUIElement {
         return "AXUIElement(role: \"\(role)\", pid: \(pid), \(txtInfo) enabled: \(self.isEnabled), \(frame), \(hash))"
     }
 
-    public func findElement(filter: (AXUIElement)->Bool) -> AXUIElement? {
+    public var trackBack: String {
+        var arr: [String] = [ toString() ]
+        while let p = parent {
+            arr.append(p.toString())
+        }
+        return arr.reversed().enumerated().map {(n, s)in
+            String(repeating: "  ", count: n) + s
+        }
+        .joined(separator: "\n")
+    }
+
+    public func findElement(_ filter: (AXUIElement)->Bool) -> AXUIElement? {
         if filter(self) {
             return self
         }
         for ch in self.children {
-            if let e = ch.findElement(filter: filter) {
+            if let e = ch.findElement(filter) {
                 return e
             }
         }
         return nil
     }
 
-    public func findElement(attrs: [String: Any]) -> AXUIElement? {
+    public func findElement(_ attrs: [String: Any]) -> AXUIElement? {
         return findElement { ele in
             for (k, v) in attrs {
                 if let value: AnyObject = ele.valueOfAttr(k) {
@@ -367,6 +378,78 @@ extension AXUIElement {
                 } else {
                     return false
                 }
+            }
+            return true
+        }
+    }
+
+    public func findAllElements(_ filter: (AXUIElement)->Bool) -> [AXUIElement] {
+        var ret: [AXUIElement] = []
+        if filter(self) {
+            ret.append(self)
+        }
+        let arr = self.children.map { $0.findAllElements( filter) }.flatMap { $0 }
+        ret.append(contentsOf: arr)
+        return ret
+    }
+
+    public func findAllElements(_ attrs: [String: Any]) -> [AXUIElement] {
+        return findAllElements { ele in
+            for (k, v) in attrs {
+                if let value: AnyObject = ele.valueOfAttr(k) {
+                    if stringFromAttrValue(value) != "\(v)" {
+                        return false
+                    }
+                } else {
+                    return false
+                }
+            }
+            return true
+        }
+    }
+
+    public func waitUntilElement(_ attrs: [String: Any], timeout: Int = 10) -> AXUIElement? {
+        var count = 0
+        while true {
+            if count >= timeout {
+                return nil
+            }
+            count += 1
+            guard let e = self.findElement(attrs) else {
+                sleep(1)
+                continue
+            }
+            return e
+        }
+    }
+
+    public func waitUntil(timeout: Int = 10, _ condition: ()-> AXUIElement?) -> AXUIElement? {
+        var count = 0
+        while true {
+            if count >= timeout {
+                return nil
+            }
+            count += 1
+
+            guard let e = condition() else {
+                sleep(1)
+                continue
+            }
+            return e
+        }
+    }
+
+    public func waitUntil(timeoutInSeconds: Int=10, _ condition: ()-> Bool) -> Bool {
+        var count = 0
+        while true {
+            if count >= timeoutInSeconds {
+                return false
+            }
+            count += 1
+
+            guard condition() else {
+                sleep(1)
+                continue
             }
             return true
         }
@@ -938,7 +1021,38 @@ extension AXUIElement {
             print("Element frame is nil")
             return nil
         }
-        if let winId = windowId {
+        var window_number = windowId
+        if window_number == nil {
+            guard let win_frame = self.window?.frame else {
+                print("Window frame is nil")
+                return nil
+            }
+
+            // https://stackoverflow.com/questions/30336740/how-to-get-window-list-from-core-grapics-api-with-swift
+            guard let info = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as? [[ String : Any]] else {
+                return nil
+            }
+            window_number = info.first(where: { dict in
+                // let window_number = dict[kCGWindowNumber as String] as? UInt32 ?? 0
+                let owner_pid = dict[kCGWindowOwnerPID as String] as? pid_t ?? 0
+                // let owner_name = dict[kCGWindowOwnerName as String] as? String ?? "Unknown"
+                let window_name = dict[kCGWindowName as String] as? String ?? "Unknown"
+                let window_bounds = dict[kCGWindowBounds as String] as? [String: CGFloat] ?? [:]
+
+                if self.pid != owner_pid || self.window?.title != window_name {
+                    return false
+                }
+                let x = window_bounds["X"] ?? 0
+                let y = window_bounds["Y"] ?? 0
+                let width = window_bounds["Width"] ?? 0
+                let height = window_bounds["Height"] ?? 0
+                if x != win_frame.origin.x || y != win_frame.origin.y || width != win_frame.size.width || height != win_frame.size.height {
+                    return false
+                }
+                return true
+            })?[kCGWindowNumber as String] as? UInt32
+        }
+        if let winId = window_number {
             guard let cgImage = CGWindowListCreateImage(
                 frame,
                 .optionIncludingWindow,
@@ -952,6 +1066,14 @@ extension AXUIElement {
             }
             return cgImage
         }
+
+        // // take a screenshot of the window
+        // // `/usr/sbin/screencapture -l <window_number> image.png`
+        // Process.launchedProcess(
+        //     launchPath: "/usr/sbin/screencapture",
+        //     arguments: ["-l", "\(window_number)", url.path]
+        // ).waitUntilExit()
+
         return nil
     }
 
