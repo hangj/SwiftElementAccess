@@ -477,7 +477,7 @@ extension AXUIElement {
 
     public func activate() {
         if let app = NSRunningApplication(processIdentifier: self.pid) {
-            print("app.isActive:", app.isActive)
+            // print("app.isActive:", app.isActive)
             // Indicates whether the application is currently frontmost
             if !app.isActive {
                 app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
