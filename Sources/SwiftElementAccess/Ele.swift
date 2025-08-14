@@ -408,7 +408,7 @@ extension AXUIElement {
         }
     }
 
-    public func waitUntilElement(_ attrs: [String: Any], timeout: Int = 10) -> AXUIElement? {
+    public func waitUntilElement(timeout: Int = 10, _ attrs: [String: Any]) async -> AXUIElement? {
         var count = 0
         while true {
             if count >= timeout {
@@ -416,14 +416,15 @@ extension AXUIElement {
             }
             count += 1
             guard let e = self.findElement(attrs) else {
-                sleep(1)
+                // sleep(1)
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
                 continue
             }
             return e
         }
     }
 
-    public func waitUntil(timeout: Int = 10, _ condition: ()-> AXUIElement?) -> AXUIElement? {
+    public func waitUntil(timeout: Int = 10, _ condition: ()-> AXUIElement?) async -> AXUIElement? {
         var count = 0
         while true {
             if count >= timeout {
@@ -432,14 +433,15 @@ extension AXUIElement {
             count += 1
 
             guard let e = condition() else {
-                sleep(1)
+                // sleep(1)
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
                 continue
             }
             return e
         }
     }
 
-    public func waitUntil(timeoutInSeconds: Int=10, _ condition: ()-> Bool) -> Bool {
+    public func waitUntil(timeoutInSeconds: Int=10, _ condition: ()-> Bool) async -> Bool {
         var count = 0
         while true {
             if count >= timeoutInSeconds {
@@ -448,7 +450,8 @@ extension AXUIElement {
             count += 1
 
             guard condition() else {
-                sleep(1)
+                // sleep(1)
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
                 continue
             }
             return true
@@ -503,7 +506,6 @@ extension AXUIElement {
                         print("setAppFrontmost failed:", e)
                         break
                     }
-                    sleep(1)
                 }
             } else {
                 self.appUIElement.isAppFrontmost = true
@@ -530,7 +532,6 @@ extension AXUIElement {
                         print("setWindowFrontmost failed:", e)
                         break
                     }
-                    sleep(1)
                 }
             } else {
                 self.window?.isWindowFrontmost = true
