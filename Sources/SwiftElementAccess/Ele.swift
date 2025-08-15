@@ -342,12 +342,15 @@ extension AXUIElement {
             frame = "frame: \(frm)"
         }
         let hash = "hashValue: \(self.hashValue)"
-        return "AXUIElement(role: \"\(role)\", pid: \(pid), \(txtInfo) enabled: \(self.isEnabled), \(frame), \(hash))"
+        return "AXUIElement(role: \"\(role)\", \(txtInfo) enabled: \(self.isEnabled), \(frame), pid: \(pid), \(hash))"
     }
 
     public var trackBack: String {
         var arr: [String] = [ toString() ]
-        while let p = parent {
+        var e = self
+
+        while let p = e.parent {
+            e = p
             arr.append(p.toString())
         }
         return arr.reversed().enumerated().map {(n, s)in
