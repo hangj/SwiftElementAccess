@@ -320,6 +320,9 @@ extension AXUIElement {
     public func toString() -> String {
         var txtInfo = ""
 
+        if !subRole.isEmpty {
+            txtInfo += "subrole: \"\(subRole)\","
+        }
         if !title.isEmpty {
             txtInfo += "title: \"\(title)\","
         }
@@ -328,6 +331,9 @@ extension AXUIElement {
         }
         if !desc.isEmpty {
             txtInfo += "description: \"\(desc)\","
+        }
+        if !help.isEmpty {
+            txtInfo += "help: \"\(help)\","
         }
 
         if let v: AnyObject = self.value() {
