@@ -1063,6 +1063,7 @@ extension AXUIElement {
         }
         if let winId = window_number {
             #if canImport(ScreenCaptureKit)
+            if #available(macOS 14.0, *) {
                 guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false) else {
                     print("SCShareableContent.excludingDesktopWindows failed.")
                     return nil
@@ -1086,17 +1087,23 @@ extension AXUIElement {
                     print("SCScreenshotManager.captureImage failed.")
                     return nil
                 }
-            #else
-                guard let cgImage = CGWindowListCreateImage(
-                    frame,
-                    .optionIncludingWindow,
-                    winId,
-                    [.boundsIgnoreFraming, .bestResolution]
-                ) else {
-                    print("CGWindowListCreateImage failed. If you call this function from outside of a GUI security session or when no window server is running, this function returns NULL")
-                    return nil
+                if let path = path {
+                    let img = CIImage(cgImage: cgImage)
+                    try? CIContext(options: nil).writePNGRepresentation(of: img, to: URL(fileURLWithPath: path), format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
                 }
+                return cgImage
+            }
             #endif
+
+            guard let cgImage = CGWindowListCreateImage(
+                frame,
+                .optionIncludingWindow,
+                winId,
+                [.boundsIgnoreFraming, .bestResolution]
+            ) else {
+                print("CGWindowListCreateImage failed. If you call this function from outside of a GUI security session or when no window server is running, this function returns NULL")
+                return nil
+            }
 
             if let path = path {
                 let img = CIImage(cgImage: cgImage)
