@@ -1,5 +1,6 @@
 import Cocoa
 import MyObjCTarget
+import ScreenCaptureKit
 
 /// https://stackoverflow.com/a/50901425/1936057
 /// It appears, in 10.13.3 at least, that applications which are using the app sandbox will not have the alert shown. If you turn off app sandbox in the project entitlements then the alert is shown
@@ -15,13 +16,7 @@ public func checkIsProcessTrusted(prompt: Bool = true) -> Bool {
 }
 
 private func carbonScreenPointFromCocoaScreenPoint(_ point : NSPoint) -> CGPoint? {
-    var foundScreen: NSScreen?
-    for screen in NSScreen.screens {
-        if NSPointInRect(point, screen.frame) {
-            foundScreen = screen
-            break
-        }
-    }
+    let foundScreen = NSScreen.screens.first{ $0.frame.contains(point) }
     if let screen = foundScreen {
         let height = screen.frame.size.height
         return CGPoint(x: point.x, y: height - point.y - 1)
@@ -1026,7 +1021,7 @@ extension AXUIElement {
         return winId
     }
 
-    public func take_screenshot(path: String? = nil) -> CGImage? {
+    public func take_screenshot(path: String? = nil) async -> CGImage? {
         guard let frame = self.frame else {
             print("Element frame is nil")
             return nil
@@ -1040,6 +1035,7 @@ extension AXUIElement {
 
             // https://stackoverflow.com/questions/30336740/how-to-get-window-list-from-core-grapics-api-with-swift
             guard let info = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as? [[ String : Any]] else {
+                print("CGWindowListCopyWindowInfo failed.")
                 return nil
             }
             window_number = info.first(where: { dict in
@@ -1063,12 +1059,47 @@ extension AXUIElement {
             })?[kCGWindowNumber as String] as? UInt32
         }
         if let winId = window_number {
+            if #available(macOS 14.0, *) {
+                guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false) else {
+                    print("SCShareableContent.excludingDesktopWindows failed.")
+                    return nil
+                }
+                // guard let mainDisplayID = NSScreen.main?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
+                // let display = content!.displays.first(where: { $0.displayID == mainDisplayID }) else { return nil }
+                // let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
+                let win = content.windows.first(where: { $0.windowID == winId })!
+                let filter = SCContentFilter(desktopIndependentWindow: win)
+
+                let cfg = SCStreamConfiguration()
+                cfg.width = Int(frame.width)
+                cfg.height = Int(frame.height)
+                cfg.sourceRect = frame.offsetBy(dx: -win.frame.origin.x, dy: -win.frame.origin.y)
+                cfg.captureResolution = .best
+                cfg.preservesAspectRatio = true
+                cfg.capturesAudio = false
+                cfg.scalesToFit = false
+                cfg.showsCursor = false
+                guard let cgImage = try? await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg) else {
+                    print("SCScreenshotManager.captureImage failed.")
+                    return nil
+                }
+                if let path = path {
+                    let img = CIImage(cgImage: cgImage)
+                    try? CIContext(options: nil).writePNGRepresentation(of: img, to: URL(fileURLWithPath: path), format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
+                }
+                return cgImage
+            } else {
+                // Fallback on earlier versions
+            }
             guard let cgImage = CGWindowListCreateImage(
                 frame,
                 .optionIncludingWindow,
                 winId,
                 [.boundsIgnoreFraming, .bestResolution]
-            ) else { return nil }
+            ) else {
+                print("CGWindowListCreateImage failed. If you call this function from outside of a GUI security session or when no window server is running, this function returns NULL")
+                return nil
+            }
 
             if let path = path {
                 let img = CIImage(cgImage: cgImage)
@@ -1084,10 +1115,11 @@ extension AXUIElement {
         //     arguments: ["-l", "\(window_number)", url.path]
         // ).waitUntilExit()
 
+        print("windowId not found!")
         return nil
     }
 
-    public func scan_qrcodes() -> [String]? {
+    public func scan_qrcodes() async -> [String]? {
         guard let detector = CIDetector(
             ofType: CIDetectorTypeQRCode,
             context: nil,
@@ -1097,7 +1129,7 @@ extension AXUIElement {
             return nil
         }
 
-        guard let cgimg = self.take_screenshot() else {
+        guard let cgimg = await take_screenshot() else {
             return nil
         }
 
