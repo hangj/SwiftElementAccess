@@ -1,6 +1,9 @@
 import Cocoa
 import MyObjCTarget
+
+#if canImport(ScreenCaptureKit)
 import ScreenCaptureKit
+#endif
 
 /// https://stackoverflow.com/a/50901425/1936057
 /// It appears, in 10.13.3 at least, that applications which are using the app sandbox will not have the alert shown. If you turn off app sandbox in the project entitlements then the alert is shown
@@ -1059,7 +1062,7 @@ extension AXUIElement {
             })?[kCGWindowNumber as String] as? UInt32
         }
         if let winId = window_number {
-            if #available(macOS 14.0, *) {
+            #if canImport(ScreenCaptureKit)
                 guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false) else {
                     print("SCShareableContent.excludingDesktopWindows failed.")
                     return nil
@@ -1083,23 +1086,17 @@ extension AXUIElement {
                     print("SCScreenshotManager.captureImage failed.")
                     return nil
                 }
-                if let path = path {
-                    let img = CIImage(cgImage: cgImage)
-                    try? CIContext(options: nil).writePNGRepresentation(of: img, to: URL(fileURLWithPath: path), format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
+            #else
+                guard let cgImage = CGWindowListCreateImage(
+                    frame,
+                    .optionIncludingWindow,
+                    winId,
+                    [.boundsIgnoreFraming, .bestResolution]
+                ) else {
+                    print("CGWindowListCreateImage failed. If you call this function from outside of a GUI security session or when no window server is running, this function returns NULL")
+                    return nil
                 }
-                return cgImage
-            } else {
-                // Fallback on earlier versions
-            }
-            guard let cgImage = CGWindowListCreateImage(
-                frame,
-                .optionIncludingWindow,
-                winId,
-                [.boundsIgnoreFraming, .bestResolution]
-            ) else {
-                print("CGWindowListCreateImage failed. If you call this function from outside of a GUI security session or when no window server is running, this function returns NULL")
-                return nil
-            }
+            #endif
 
             if let path = path {
                 let img = CIImage(cgImage: cgImage)
