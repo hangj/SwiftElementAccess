@@ -1075,8 +1075,8 @@ extension AXUIElement {
                 let filter = SCContentFilter(desktopIndependentWindow: win)
 
                 let cfg = SCStreamConfiguration()
-                cfg.width = Int(frame.width)
-                cfg.height = Int(frame.height)
+                cfg.width = Int(frame.width * NSScreen.main!.backingScaleFactor)
+                cfg.height = Int(frame.height * NSScreen.main!.backingScaleFactor)
                 cfg.sourceRect = frame.offsetBy(dx: -win.frame.origin.x, dy: -win.frame.origin.y)
                 cfg.captureResolution = .best
                 cfg.preservesAspectRatio = true
