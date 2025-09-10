@@ -554,6 +554,10 @@ extension AXUIElement {
         return -1
     }
 
+    public var bundleIdentifier: String? {
+        return NSRunningApplication(processIdentifier: self.pid)?.bundleIdentifier
+    }
+
     public var attrNames: [String] {
         var arrNames: CFArray?
         let err = AXUIElementCopyAttributeNames(self, &arrNames)
