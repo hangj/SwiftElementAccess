@@ -554,6 +554,104 @@ extension AXUIElement {
         return -1
     }
 
+    public var psn: ProcessSerialNumber? {
+        /// https://stackoverflow.com/questions/70823422/how-to-get-the-process-serial-number-for-an-external-process-under-macos
+        /// lsappinfo find bundleid="com.tencent.xinWeChat" pid=48600
+        /// lsappinfo find pid=48600
+        /// output: `ASN:0x0-0x1f10f0f-"微信":`
+        /// `var psn = ProcessSerialNumber(highLongOfPSN: 0, lowLongOfPSN: 0x1f10f0f)`
+
+        var psn = ProcessSerialNumber()
+
+        if let HIServiceBundle = CFBundleGetBundleWithIdentifier("com.apple.HIServices" as CFString), let functionPtr = CFBundleGetFunctionPointerForName(HIServiceBundle, "GetProcessForPID" as CFString) {
+            let GetProcessForPID = unsafeBitCast(functionPtr,to:(@convention(c)(pid_t, UnsafePointer<ProcessSerialNumber>)->OSStatus).self)
+            if noErr == GetProcessForPID(pid, &psn) {
+                return psn
+            }
+        }
+
+        /// https://stackoverflow.com/questions/75163201/how-can-i-get-the-dock-badge-text-of-other-applications
+
+        guard let CoreServiceBundle = CFBundleGetBundleWithIdentifier("com.apple.CoreServices" as CFString) else {
+            print("CoreServiceBundle not found")
+            return nil
+        }
+
+        guard let functionPtr_LSCopyRunningApplicationArray = CFBundleGetFunctionPointerForName(CoreServiceBundle, "_LSCopyRunningApplicationArray" as CFString) else {
+            print("_LSCopyRunningApplicationArray not found")
+            return nil
+        }
+
+        let GetRunningApplicationArray = { () -> [CFTypeRef] in
+            return unsafeBitCast(functionPtr_LSCopyRunningApplicationArray, to: (@convention(c)(UInt) -> [CFTypeRef]).self)(0xfffffffe)
+        }
+
+        guard let functionPtr_LSCopyApplicationInformation = CFBundleGetFunctionPointerForName(CoreServiceBundle, "_LSCopyApplicationInformation" as CFString) else {
+            print("_LSCopyApplicationInformation not found")
+            return nil
+        }
+        let GetApplicationInformation: (CFTypeRef) -> [String:CFTypeRef] = { app in
+            return unsafeBitCast(functionPtr_LSCopyApplicationInformation, to: (@convention(c)(UInt, Any, Any) -> [String:CFTypeRef]).self)(0xffffffff, app, 0)
+        }
+
+        guard let functionPtr_LSASNExtractHighAndLowParts = CFBundleGetFunctionPointerForName(CoreServiceBundle, "_LSASNExtractHighAndLowParts" as CFString) else {
+            print("_LSASNExtractHighAndLowParts not found")
+            return nil
+        }
+        let LSASNExtractHighAndLowParts = { (asn: CFTypeRef, high: UnsafeMutablePointer<UInt32>, low: UnsafeMutablePointer<UInt32>) -> Void in
+            return unsafeBitCast(functionPtr_LSASNExtractHighAndLowParts, to: (@convention(c)(CFTypeRef, UnsafeMutablePointer<UInt32>, UnsafeMutablePointer<UInt32>)->Void).self)(asn, high, low)
+        }
+
+        // let LSASNToUInt64 = { (asn: CFTypeRef) -> UInt64 in
+        //     let functionPtr = CFBundleGetFunctionPointerForName(CoreServiceBundle, "_LSASNToUInt64" as CFString)
+        //     return unsafeBitCast(functionPtr,to:(@convention(c)(CFTypeRef)->UInt64).self)(asn)
+        // }
+
+        let appInfos = GetRunningApplicationArray().map { GetApplicationInformation($0) }
+        guard let info = appInfos.first(where: { $0["pid"] as? pid_t == pid }) else {
+            print("App with pid \(pid) not found")
+            return nil
+        }
+        guard let lsasn = info["LSASN"] else {
+            print("LSASN not found")
+            return nil
+        }
+
+        LSASNExtractHighAndLowParts(lsasn, &psn.highLongOfPSN, &psn.lowLongOfPSN)
+        return psn
+    }
+
+    public func sendReopenEvent() -> Bool {
+        guard var psn = self.psn else {
+            print("psn not found")
+            return false
+        }
+
+        var target = AEDesc()
+        if noErr != AECreateDesc( typeProcessSerialNumber, &psn, MemoryLayout.size(ofValue: psn), &target) {
+            print("AECreateDesc error")
+            return false
+        }
+
+        var event = AppleEvent()
+        let e = AECreateAppleEvent ( kCoreEventClass,
+                kAEReopenApplication ,
+                &target,
+                Int16(kAutoGenerateReturnID),
+                Int32(kAnyTransactionID),
+                &event)
+        if e != noErr {
+            print("AECreateAppleEvent error:", e)
+            return false
+        }
+
+        var reply = AppleEvent()
+        let r = AESendMessage(&event, &reply, AESendMode(kAEWaitReply), 3)
+        // print("reply:", reply)
+
+        return r == noErr
+    }
+
     public var bundleIdentifier: String? {
         return NSRunningApplication(processIdentifier: self.pid)?.bundleIdentifier
     }
