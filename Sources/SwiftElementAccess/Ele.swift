@@ -1122,8 +1122,41 @@ extension AXUIElement {
 
         var winId = CGWindowID(0)
         let result = _AXUIElementGetWindow(win, &winId)
-        guard result == .success else { return nil }
-        return winId
+        if result == .success { return winId }
+
+        guard let win_frame = self.window?.frame else {
+            print("Window frame is nil")
+            return nil
+        }
+
+        // https://stackoverflow.com/questions/30336740/how-to-get-window-list-from-core-grapics-api-with-swift
+        guard let info = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as? [[ String : Any]] else {
+            print("CGWindowListCopyWindowInfo failed.")
+            return nil
+        }
+        if let winId = info.first(where: { dict in
+            // let window_number = dict[kCGWindowNumber as String] as? UInt32 ?? 0
+            let owner_pid = dict[kCGWindowOwnerPID as String] as? pid_t ?? 0
+            // let owner_name = dict[kCGWindowOwnerName as String] as? String ?? "Unknown"
+            let window_name = dict[kCGWindowName as String] as? String ?? "Unknown"
+            let window_bounds = dict[kCGWindowBounds as String] as? [String: CGFloat] ?? [:]
+
+            if self.pid != owner_pid || self.window?.title != window_name {
+                return false
+            }
+            let x = window_bounds["X"] ?? 0
+            let y = window_bounds["Y"] ?? 0
+            let width = window_bounds["Width"] ?? 0
+            let height = window_bounds["Height"] ?? 0
+            if x != win_frame.origin.x || y != win_frame.origin.y || width != win_frame.size.width || height != win_frame.size.height {
+                return false
+            }
+            return true
+        })?[kCGWindowNumber as String] as? UInt32 {
+            return winId
+        }
+
+        return nil
     }
 
     public func take_screenshot(path: String? = nil) async -> CGImage? {
@@ -1131,88 +1164,61 @@ extension AXUIElement {
             print("Element frame is nil")
             return nil
         }
-        var window_number = windowId
-        if window_number == nil {
-            guard let win_frame = self.window?.frame else {
-                print("Window frame is nil")
-                return nil
-            }
 
-            // https://stackoverflow.com/questions/30336740/how-to-get-window-list-from-core-grapics-api-with-swift
-            guard let info = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as? [[ String : Any]] else {
-                print("CGWindowListCopyWindowInfo failed.")
-                return nil
-            }
-            window_number = info.first(where: { dict in
-                // let window_number = dict[kCGWindowNumber as String] as? UInt32 ?? 0
-                let owner_pid = dict[kCGWindowOwnerPID as String] as? pid_t ?? 0
-                // let owner_name = dict[kCGWindowOwnerName as String] as? String ?? "Unknown"
-                let window_name = dict[kCGWindowName as String] as? String ?? "Unknown"
-                let window_bounds = dict[kCGWindowBounds as String] as? [String: CGFloat] ?? [:]
-
-                if self.pid != owner_pid || self.window?.title != window_name {
-                    return false
-                }
-                let x = window_bounds["X"] ?? 0
-                let y = window_bounds["Y"] ?? 0
-                let width = window_bounds["Width"] ?? 0
-                let height = window_bounds["Height"] ?? 0
-                if x != win_frame.origin.x || y != win_frame.origin.y || width != win_frame.size.width || height != win_frame.size.height {
-                    return false
-                }
-                return true
-            })?[kCGWindowNumber as String] as? UInt32
+        guard let winId = windowId else {
+            print("windowId not found!")
+            return nil
         }
-        if let winId = window_number {
-            #if canImport(ScreenCaptureKit)
-            if #available(macOS 14.0, *) {
-                guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false) else {
-                    print("SCShareableContent.excludingDesktopWindows failed.")
-                    return nil
-                }
-                // guard let mainDisplayID = NSScreen.main?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
-                // let display = content!.displays.first(where: { $0.displayID == mainDisplayID }) else { return nil }
-                // let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
-                let win = content.windows.first(where: { $0.windowID == winId })!
-                let filter = SCContentFilter(desktopIndependentWindow: win)
 
-                let cfg = SCStreamConfiguration()
-                cfg.width = Int(frame.width * NSScreen.main!.backingScaleFactor)
-                cfg.height = Int(frame.height * NSScreen.main!.backingScaleFactor)
-                cfg.sourceRect = frame.offsetBy(dx: -win.frame.origin.x, dy: -win.frame.origin.y)
-                cfg.captureResolution = .best
-                cfg.preservesAspectRatio = true
-                cfg.capturesAudio = false
-                cfg.scalesToFit = false
-                cfg.showsCursor = false
-                guard let cgImage = try? await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg) else {
-                    print("SCScreenshotManager.captureImage failed.")
-                    return nil
-                }
-                if let path = path {
-                    let img = CIImage(cgImage: cgImage)
-                    try? CIContext(options: nil).writePNGRepresentation(of: img, to: URL(fileURLWithPath: path), format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
-                }
-                return cgImage
-            }
-            #endif
 
-            guard let cgImage = CGWindowListCreateImage(
-                frame,
-                .optionIncludingWindow,
-                winId,
-                [.boundsIgnoreFraming, .bestResolution]
-            ) else {
-                print("CGWindowListCreateImage failed. If you call this function from outside of a GUI security session or when no window server is running, this function returns NULL")
+        #if canImport(ScreenCaptureKit)
+        if #available(macOS 14.0, *) {
+            guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false) else {
+                print("SCShareableContent.excludingDesktopWindows failed.")
                 return nil
             }
+            // guard let mainDisplayID = NSScreen.main?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
+            // let display = content!.displays.first(where: { $0.displayID == mainDisplayID }) else { return nil }
+            // let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
+            let win = content.windows.first(where: { $0.windowID == winId })!
+            let filter = SCContentFilter(desktopIndependentWindow: win)
 
+            let cfg = SCStreamConfiguration()
+            cfg.width = Int(frame.width * NSScreen.main!.backingScaleFactor)
+            cfg.height = Int(frame.height * NSScreen.main!.backingScaleFactor)
+            cfg.sourceRect = frame.offsetBy(dx: -win.frame.origin.x, dy: -win.frame.origin.y)
+            cfg.captureResolution = .best
+            cfg.preservesAspectRatio = true
+            cfg.capturesAudio = false
+            cfg.scalesToFit = false
+            cfg.showsCursor = false
+            guard let cgImage = try? await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg) else {
+                print("SCScreenshotManager.captureImage failed.")
+                return nil
+            }
             if let path = path {
                 let img = CIImage(cgImage: cgImage)
                 try? CIContext(options: nil).writePNGRepresentation(of: img, to: URL(fileURLWithPath: path), format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
             }
             return cgImage
         }
+        #endif
+
+        guard let cgImage = CGWindowListCreateImage(
+            frame,
+            .optionIncludingWindow,
+            winId,
+            [.boundsIgnoreFraming, .bestResolution]
+        ) else {
+            print("CGWindowListCreateImage failed. If you call this function from outside of a GUI security session or when no window server is running, this function returns NULL")
+            return nil
+        }
+
+        if let path = path {
+            let img = CIImage(cgImage: cgImage)
+            try? CIContext(options: nil).writePNGRepresentation(of: img, to: URL(fileURLWithPath: path), format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
+        }
+        return cgImage
 
         // // take a screenshot of the window
         // // `/usr/sbin/screencapture -l <window_number> image.png`
@@ -1220,9 +1226,6 @@ extension AXUIElement {
         //     launchPath: "/usr/sbin/screencapture",
         //     arguments: ["-l", "\(window_number)", url.path]
         // ).waitUntilExit()
-
-        print("windowId not found!")
-        return nil
     }
 
     public func scan_qrcodes() async -> [String]? {
