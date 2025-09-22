@@ -507,12 +507,13 @@ extension AXUIElement {
         set(v) {
             if self.isApplicationUIElement {
                 self.activate()
-                while !self.isAppFrontmost {
+                if !self.isAppFrontmost {
                     let e = AXUIElementSetAttributeValue(self, kAXFrontmostAttribute as CFString, v as CFTypeRef)
                     if e != .success {
                         print("setAppFrontmost failed:", e)
-                        break
+                        return
                     }
+                    print("setAppFrontmost success")
                 }
             } else {
                 self.appUIElement.isAppFrontmost = true
