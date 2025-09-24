@@ -5,18 +5,6 @@ import MyObjCTarget
 import ScreenCaptureKit
 #endif
 
-/// https://stackoverflow.com/a/50901425/1936057
-/// It appears, in 10.13.3 at least, that applications which are using the app sandbox will not have the alert shown. If you turn off app sandbox in the project entitlements then the alert is shown
-public func checkIsProcessTrusted(prompt: Bool = true) -> Bool {
-    if ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil {
-        print("sandbox is enabled.")
-        // print("This app is not trusted to use Accessibility API. Please enable it in System Preferences > Security & Privacy > Privacy > Accessibility")
-        return false
-    }
-    let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-    let opts = [promptKey: prompt] as CFDictionary
-    return AXIsProcessTrustedWithOptions(opts)
-}
 
 private func carbonScreenPointFromCocoaScreenPoint(_ point : NSPoint) -> CGPoint? {
     let foundScreen = NSScreen.screens.first{ $0.frame.contains(point) }
@@ -171,6 +159,19 @@ extension AXUIElement {
     static var observers: [pid_t: AXObserver] = [:]
     static var notificationCallbacks: [AXUIElement: Callback] = [:]
     static var notifications: [AXUIElement: [String]] = [:]
+
+    /// https://stackoverflow.com/a/50901425/1936057
+    /// It appears, in 10.13.3 at least, that applications which are using the app sandbox will not have the alert shown. If you turn off app sandbox in the project entitlements then the alert is shown
+    public static func checkIsProcessTrusted(prompt: Bool = true) -> Bool {
+        if ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil {
+            print("sandbox is enabled.")
+            // print("This app is not trusted to use Accessibility API. Please enable it in System Preferences > Security & Privacy > Privacy > Accessibility")
+            return false
+        }
+        let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+        let opts = [promptKey: prompt] as CFDictionary
+        return AXIsProcessTrustedWithOptions(opts)
+    }
 
     static private func observerCallback(_ observer:AXObserver, _ element:AXUIElement, _ notification:CFString, _ userData:UnsafeMutableRawPointer?) -> Void {
         guard let userData = userData else { return }
@@ -552,6 +553,7 @@ extension AXUIElement {
         if AXUIElementGetPid(self, &pid) == .success {
             return pid
         }
+        print("AXUIElementGetPid error")
         return -1
     }
 
@@ -1249,5 +1251,25 @@ extension AXUIElement {
         let qrCodes = features.compactMap { $0 as? CIQRCodeFeature }.compactMap { $0.messageString }
 
         return qrCodes
+    }
+
+    public static func sendKeyCode(_ keyCode: CGKeyCode, masks: CGEventFlags = [], toPid pid: pid_t? = nil) {
+        let source = CGEventSource(stateID: .hidSystemState)
+        guard let down = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
+            let up = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else {
+            print("CGEvent init failed")
+            return
+        }
+
+        down.flags = masks
+        up.flags = masks
+
+        if let pid = pid, pid >= 0 {
+            down.postToPid(pid)
+            up.postToPid(pid)
+        } else {
+            down.post(tap: .cghidEventTap)
+            up.post(tap: .cghidEventTap)
+        }
     }
 }
