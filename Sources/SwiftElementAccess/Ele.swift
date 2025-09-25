@@ -638,7 +638,7 @@ extension AXUIElement {
 
         var event = AppleEvent()
         let e = AECreateAppleEvent ( kCoreEventClass,
-                kAEReopenApplication ,
+                kAEReopenApplication,
                 &target,
                 Int16(kAutoGenerateReturnID),
                 Int32(kAnyTransactionID),
@@ -649,8 +649,11 @@ extension AXUIElement {
         }
 
         var reply = AppleEvent()
-        let r = AESendMessage(&event, &reply, AESendMode(kAEWaitReply), 3)
-        // print("reply:", reply)
+        let r = AESendMessage(&event, &reply, AESendMode(kAEWaitReply), kAEDefaultTimeout)
+        if r != noErr {
+            print("AESendMessage error:", r)
+            return false
+        }
 
         return r == noErr
     }
