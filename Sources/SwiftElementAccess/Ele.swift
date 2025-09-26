@@ -5,12 +5,10 @@ import MyObjCTarget
 import ScreenCaptureKit
 #endif
 
-
+/// screen coordinate(origin at lower-left corner) to local display coordinate(origin at upper-left corner)
 private func carbonScreenPointFromCocoaScreenPoint(_ point : NSPoint) -> CGPoint? {
-    let foundScreen = NSScreen.screens.first{ $0.frame.contains(point) }
-    if let screen = foundScreen {
-        let height = screen.frame.size.height
-        return CGPoint(x: point.x, y: height - point.y - 1)
+    if let frame = NSScreen.screens.first(where: { $0.frame.contains(point) })?.frame {
+        return CGPoint(x: point.x, y: frame.height - (point.y - frame.origin.y))
     }
 
     return nil
@@ -223,6 +221,7 @@ extension AXUIElement {
         return nil
     }
 
+    /// Returns the accessibility object at the specified position in top-left relative screen coordinates
     public static func fromPosition(x: Float, y: Float) -> AXUIElement? {
         var ele: AXUIElement?
         let err = AXUIElementCopyElementAtPosition(AXUIElement.systemRef, x, y, &ele)
@@ -232,6 +231,7 @@ extension AXUIElement {
         return nil
     }
 
+    /// Returns the accessibility object at the specified position in top-left relative screen coordinates
     public static func fromPosition(_ pos: NSPoint) -> AXUIElement? {
         return fromPosition(x: Float(pos.x), y: Float(pos.y))
     }
@@ -839,7 +839,7 @@ extension AXUIElement {
         return false
     }
 
-    /// top-left corner of the element
+    /// top-left corner of the element, display coordinate(origin at upper-left corner)
     public var position: CGPoint? {
         get {
             // Value: An AXValueRef with type kAXValueCGPointType
@@ -881,6 +881,7 @@ extension AXUIElement {
         }
     }
 
+    /// display coordinate(origin at upper-left corner)
     public var frame: CGRect? {
         if let v: AXValue = self.valueOfAttr("AXFrame") {
             var rect = CGRect()
@@ -1256,6 +1257,8 @@ extension AXUIElement {
         return qrCodes
     }
 
+    // -------------------------------------
+
     public static func sendKeyCode(_ keyCode: CGKeyCode, masks: CGEventFlags = [], toPid pid: pid_t? = nil) {
         let source = CGEventSource(stateID: .hidSystemState)
         guard let down = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
@@ -1274,5 +1277,39 @@ extension AXUIElement {
             down.post(tap: .cghidEventTap)
             up.post(tap: .cghidEventTap)
         }
+    }
+
+    public static func copy(str: String) -> Bool {
+        let pasteboard = NSPasteboard.general
+        pasteboard.declareTypes([.string], owner: nil)
+        return pasteboard.setString(str, forType: .string)
+    }
+
+    /// Move the mouse to a point in display coordinates(origin at upper-left corner)
+    public static func mouseMove(to: NSPoint) {
+        // Need to read the mouse location first, Or the following `CGDisplayMoveCursorToPoint(0, to)` call may stuck
+        let _ = NSEvent.mouseLocation // The current mouse location in screen coordinates, the screen coordinate system's origin is at the lower-left corner of the primary screen, with positive values increasing to the right and up
+
+        let screen = NSScreen.screens.first(where: {$0.frame.contains(CGPoint(x: to.x, y: $0.frame.height - (to.y - $0.frame.origin.y)))}) ?? NSScreen.main!
+        let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID ?? 0
+
+        CGDisplayMoveCursorToPoint(displayID, to)
+    }
+
+    /// Perform a left click at a point in display coordinates(origin is at the upper-left corner)
+    public static func mouseLeftClick(position: NSPoint? = nil) {
+        let mouseLoc = NSEvent.mouseLocation
+        let frame = NSScreen.screens.first(where: {$0.frame.contains(mouseLoc)})?.frame ?? NSScreen.main!.frame
+
+        // The coordinates of a point in local display space. The origin is the upper-left corner of the specified display.
+        let adjustedPoint = position ?? CGPoint(x: mouseLoc.x, y: frame.height - (mouseLoc.y - frame.origin.y))
+
+        let source = CGEventSource(stateID: CGEventSourceStateID.hidSystemState)
+        let down = CGEvent(mouseEventSource: source, mouseType: CGEventType.leftMouseDown,
+                            mouseCursorPosition: adjustedPoint, mouseButton: CGMouseButton.left)
+        let up = CGEvent(mouseEventSource: source, mouseType: CGEventType.leftMouseUp,
+                            mouseCursorPosition: adjustedPoint, mouseButton: CGMouseButton.left)
+        down?.post(tap: CGEventTapLocation.cghidEventTap)
+        up?.post(tap: CGEventTapLocation.cghidEventTap)
     }
 }
