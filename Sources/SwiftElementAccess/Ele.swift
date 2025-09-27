@@ -5,14 +5,6 @@ import MyObjCTarget
 import ScreenCaptureKit
 #endif
 
-/// screen coordinate(origin at lower-left corner) to local display coordinate(origin at upper-left corner)
-private func carbonScreenPointFromCocoaScreenPoint(_ point : NSPoint) -> CGPoint? {
-    if let frame = NSScreen.screens.first(where: { $0.frame.contains(point) })?.frame {
-        return CGPoint(x: point.x, y: frame.height - (point.y - frame.origin.y))
-    }
-
-    return nil
-}
 
 private func stringFromAttrValue(_ value: AnyObject) -> String {
     if value is String {
@@ -228,6 +220,7 @@ extension AXUIElement {
         if err == .success {
             return ele!
         }
+        print("AXUIElementCopyElementAtPosition error:", err)
         return nil
     }
 
@@ -237,11 +230,9 @@ extension AXUIElement {
     }
 
     public static func fromMouseLocation() -> AXUIElement? {
-        let cocoaPoint = NSEvent.mouseLocation
-        if let point = carbonScreenPointFromCocoaScreenPoint(cocoaPoint) {
-            return Self.fromPosition(point)
-        }
-        return nil
+        var point = NSEvent.mouseLocation
+        point.y = NSScreen.screens[0].frame.height - point.y
+        return Self.fromPosition(point)
     }
 
 
@@ -1191,8 +1182,8 @@ extension AXUIElement {
             let filter = SCContentFilter(desktopIndependentWindow: win)
 
             let cfg = SCStreamConfiguration()
-            cfg.width = Int(frame.width * NSScreen.main!.backingScaleFactor)
-            cfg.height = Int(frame.height * NSScreen.main!.backingScaleFactor)
+            cfg.width = Int(frame.width * NSScreen.screens[0].backingScaleFactor)
+            cfg.height = Int(frame.height * NSScreen.screens[0].backingScaleFactor)
             cfg.sourceRect = frame.offsetBy(dx: -win.frame.origin.x, dy: -win.frame.origin.y)
             cfg.captureResolution = .best
             cfg.preservesAspectRatio = true
@@ -1285,24 +1276,26 @@ extension AXUIElement {
         return pasteboard.setString(str, forType: .string)
     }
 
-    /// Move the mouse to a point in display coordinates(origin at upper-left corner)
-    public static func mouseMove(to: NSPoint) {
+    /// Move the mouse to a point in global screen coordinates(origin at upper-left corner of the main display)
+    public static func mouseMove(to: NSPoint) -> Bool {
         // Need to read the mouse location first, Or the following `CGDisplayMoveCursorToPoint(0, to)` call may stuck
         let _ = NSEvent.mouseLocation // The current mouse location in screen coordinates, the screen coordinate system's origin is at the lower-left corner of the primary screen, with positive values increasing to the right and up
 
-        let screen = NSScreen.screens.first(where: {$0.frame.contains(CGPoint(x: to.x, y: $0.frame.height - (to.y - $0.frame.origin.y)))}) ?? NSScreen.main!
-        let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID ?? 0
+        let displayID = NSScreen.screens[0].deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID ?? 0
 
-        CGDisplayMoveCursorToPoint(displayID, to)
+        // https://developer.apple.com/documentation/coregraphics/cgdisplaymovecursortopoint(_:_:)
+        // Moves the mouse cursor to a specified point relative to the upper-left corner of the displayID
+        return CGDisplayMoveCursorToPoint(displayID, to) == .success
     }
 
     /// Perform a left click at a point in display coordinates(origin is at the upper-left corner)
+    /// `AXUIElement.checkIsProcessTrusted()` first
     public static func mouseLeftClick(position: NSPoint? = nil) {
-        let mouseLoc = NSEvent.mouseLocation
-        let frame = NSScreen.screens.first(where: {$0.frame.contains(mouseLoc)})?.frame ?? NSScreen.main!.frame
+        var mouseLoc = NSEvent.mouseLocation
+        mouseLoc.y = NSScreen.screens[0].frame.height - mouseLoc.y
 
         // The coordinates of a point in local display space. The origin is the upper-left corner of the specified display.
-        let adjustedPoint = position ?? CGPoint(x: mouseLoc.x, y: frame.height - (mouseLoc.y - frame.origin.y))
+        let adjustedPoint = position ?? mouseLoc
 
         let source = CGEventSource(stateID: CGEventSourceStateID.hidSystemState)
         let down = CGEvent(mouseEventSource: source, mouseType: CGEventType.leftMouseDown,
