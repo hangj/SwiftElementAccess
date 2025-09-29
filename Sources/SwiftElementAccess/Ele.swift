@@ -765,6 +765,13 @@ extension AXUIElement {
         return ""
     }
 
+    public var placeholder: String {
+        if let s: String = self.valueOfAttr(kAXPlaceholderValueAttribute) {
+            return s
+        }
+        return ""
+    }
+
     /// kAXDescriptionAttribute
     public var desc: String {
         if let s: String = self.valueOfAttr(kAXDescriptionAttribute) {
