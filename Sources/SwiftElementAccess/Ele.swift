@@ -1164,7 +1164,86 @@ extension AXUIElement {
         return nil
     }
 
-    public func take_screenshot(path: String? = nil) async -> CGImage? {
+    public static func captureImage(screen: NSScreen, path: String) async -> CGImage? {
+        guard let cgImage = await captureImage(screen: screen) else {
+            return nil
+        }
+
+        let img = CIImage(cgImage: cgImage)
+        do {
+            try CIContext(options: nil).writePNGRepresentation(of: img, to: URL(fileURLWithPath: path), format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
+        }catch{
+            print("image save error:", error)
+        }
+
+        return cgImage
+    }
+
+    public static func captureImage(screen: NSScreen) async -> CGImage? {
+        var origin = NSScreen.main!.frame.origin
+        origin.y = NSScreen.main!.frame.maxY
+
+        var frame = screen.frame
+        frame.origin.y = origin.y - frame.maxY
+        frame.origin.x = frame.minX - origin.x
+
+        return await captureImage(screenBounds: frame)
+    }
+
+    /// screenBounds: origin at upper-left corner of the main display
+    /// If you want the whole screenshot of all the screens, you can pass NSRect.infinite to the rect
+    public static func captureImage(screenBounds: CGRect, path: String) async -> CGImage? {
+        guard let cgImage = await captureImage(screenBounds: screenBounds) else {
+            return nil
+        }
+
+        let img = CIImage(cgImage: cgImage)
+        do {
+            try CIContext(options: nil).writePNGRepresentation(of: img, to: URL(fileURLWithPath: path), format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
+        }catch{
+            print("image save error:", error)
+        }
+
+        return cgImage
+    }
+
+    /// screenBounds: origin at upper-left corner of the main display
+    /// If you want the whole screenshot of all the screens, you can pass NSRect.infinite to the rect
+    public static func captureImage(screenBounds: NSRect) async -> CGImage? {
+        var rect = screenBounds
+
+        if screenBounds == .infinite || screenBounds == .null {
+            var origin = NSScreen.main!.frame.origin
+            origin.y = NSScreen.main!.frame.maxY
+
+            var frame = NSScreen.main!.frame
+            NSScreen.screens.forEach { frame = frame.union($0.frame) }
+            frame.origin.y = origin.y - frame.maxY
+            frame.origin.x = frame.minX - origin.x
+
+            rect = frame
+        }
+
+        #if canImport(ScreenCaptureKit)
+            if #available(macOS 15.2, *) {
+                do {
+                    return try await SCScreenshotManager.captureImage(in: rect)
+                }catch{
+                    print("error:", error)
+                }
+            }
+        #endif
+
+        return CGWindowListCreateImage(
+            rect,
+            .optionOnScreenOnly,
+            kCGNullWindowID,
+            .bestResolution
+        )
+    }
+
+    /// return the screenshot of current AXUIElement
+    public func take_screenshot() async -> CGImage? {
         guard let frame = self.frame else {
             print("Element frame is nil")
             return nil
@@ -1175,37 +1254,32 @@ extension AXUIElement {
             return nil
         }
 
-
         #if canImport(ScreenCaptureKit)
         if #available(macOS 14.0, *) {
-            guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false) else {
-                print("SCShareableContent.excludingDesktopWindows failed.")
-                return nil
-            }
-            // guard let mainDisplayID = NSScreen.main?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
-            // let display = content!.displays.first(where: { $0.displayID == mainDisplayID }) else { return nil }
-            // let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
-            let win = content.windows.first(where: { $0.windowID == winId })!
-            let filter = SCContentFilter(desktopIndependentWindow: win)
+            do {
+                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+                // guard let mainDisplayID = NSScreen.main?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
+                // let display = content!.displays.first(where: { $0.displayID == mainDisplayID }) else { return nil }
+                // let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
+                guard let win = content.windows.first(where: { $0.windowID == winId }) else {
+                    print("windowID not found")
+                    return nil
+                }
+                let filter = SCContentFilter(desktopIndependentWindow: win)
 
-            let cfg = SCStreamConfiguration()
-            cfg.width = Int(frame.width * NSScreen.screens[0].backingScaleFactor)
-            cfg.height = Int(frame.height * NSScreen.screens[0].backingScaleFactor)
-            cfg.sourceRect = frame.offsetBy(dx: -win.frame.origin.x, dy: -win.frame.origin.y)
-            cfg.captureResolution = .best
-            cfg.preservesAspectRatio = true
-            cfg.capturesAudio = false
-            cfg.scalesToFit = false
-            cfg.showsCursor = false
-            guard let cgImage = try? await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg) else {
-                print("SCScreenshotManager.captureImage failed.")
-                return nil
+                let cfg = SCStreamConfiguration()
+                cfg.width = Int(frame.width * NSScreen.screens[0].backingScaleFactor)
+                cfg.height = Int(frame.height * NSScreen.screens[0].backingScaleFactor)
+                cfg.sourceRect = frame.offsetBy(dx: -win.frame.origin.x, dy: -win.frame.origin.y)
+                cfg.captureResolution = .best
+                cfg.preservesAspectRatio = true
+                cfg.capturesAudio = false
+                cfg.scalesToFit = false
+                cfg.showsCursor = false
+                return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg)
+            } catch {
+                print("error:", error)
             }
-            if let path = path {
-                let img = CIImage(cgImage: cgImage)
-                try? CIContext(options: nil).writePNGRepresentation(of: img, to: URL(fileURLWithPath: path), format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
-            }
-            return cgImage
         }
         #endif
 
@@ -1219,9 +1293,18 @@ extension AXUIElement {
             return nil
         }
 
-        if let path = path {
+        return cgImage
+    }
+
+    /// save the screenshot of current AXUIElement, and return it
+    public func take_screenshot(path: String) async -> CGImage? {
+        guard let cgImage = await take_screenshot() else { return nil }
+
+        do {
             let img = CIImage(cgImage: cgImage)
-            try? CIContext(options: nil).writePNGRepresentation(of: img, to: URL(fileURLWithPath: path), format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
+            try CIContext(options: nil).writePNGRepresentation(of: img, to: URL(fileURLWithPath: path), format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
+        } catch {
+            print("error:", error)
         }
         return cgImage
 
