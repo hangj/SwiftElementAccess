@@ -1047,6 +1047,23 @@ extension AXUIElement {
         return nil
     }
 
+    public func mouseLeftClick() {
+        guard let frame = self.frame else {
+            print("AXUIElement has no frame")
+            return
+        }
+
+        if !isAppFrontmost {
+            isAppFrontmost = true
+        }
+        if !isWindowFrontmost {
+            isWindowFrontmost = true
+        }
+        Thread.sleep(forTimeInterval: 0.01)
+
+        Auto.mouseLeftClick(position: NSPoint(x: frame.midX, y: frame.midY))
+    }
+
     public func toDict(unique: inout Set<AXUIElement>) -> Any {
         if unique.contains(self) {
             return "\(self)"
