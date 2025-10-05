@@ -8,7 +8,12 @@ final class SwiftElementAccessTests: XCTestCase {
         // results.
         // XCTAssertEqual(SwiftElementAccess().text, "Hello, World!")
 
-        let img = await AXUIElement.captureImage(screenBounds: NSRect.infinite, path: "screenshot-infinite.png")
+        // let img = await AXUIElement.captureImage(screenBounds: NSRect.infinite, path: "screenshot-infinite.png")
+
+        let app = AXUIElement.fromBundleIdentifier("com.tencent.xinWeChat").first!
+        print("window:", app.windows.first!.frame!)
+
+        let _ = await app.windows.first!.take_screenshot(path: "window.png")
 
     }
 }

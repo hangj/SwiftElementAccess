@@ -1244,6 +1244,14 @@ extension AXUIElement {
 
     /// return the screenshot of current AXUIElement
     public func take_screenshot() async -> CGImage? {
+        guard let win = self.window else {
+            print("window attr not found")
+            return nil
+        }
+        guard let win_frame = win.frame else {
+            print("win_frame is nil")
+            return nil
+        }
         guard let frame = self.frame else {
             print("Element frame is nil")
             return nil
@@ -1254,6 +1262,31 @@ extension AXUIElement {
             return nil
         }
 
+        if let cgImage = CGWindowListCreateImage(
+            frame,
+            .optionIncludingWindow,
+            winId,
+            [.boundsIgnoreFraming, .bestResolution]
+        )  {
+            return cgImage
+        }
+
+        print("CGWindowListCreateImage failed. If you call this function from outside of a GUI security session or when no window server is running, this function returns NULL")
+
+        // we use CGSHWCaptureWindowList because it can screenshot minimized windows, which CGWindowListCreateImage can't
+        var windowId_ = winId
+        let list = CGSHWCaptureWindowList(CGS_CONNECTION, &windowId_, 1, [.ignoreGlobalClipShape, .bestResolution, .fullSize]).takeRetainedValue() as? [CGImage]
+        if let cgImage = list?.first {
+            let width = frame.width * NSScreen.screens[0].backingScaleFactor
+            let height = frame.height * NSScreen.screens[0].backingScaleFactor
+            let tmp = frame.offsetBy(dx: -win_frame.origin.x, dy: -win_frame.origin.y)
+            let rect = CGRect(origin: tmp.origin, size: CGSize(width: width, height: height))
+
+            if let img = cgImage.cropping(to: rect) {
+                return img
+            }
+        }
+
         #if canImport(ScreenCaptureKit)
         if #available(macOS 14.0, *) {
             do {
@@ -1262,7 +1295,7 @@ extension AXUIElement {
                 // let display = content!.displays.first(where: { $0.displayID == mainDisplayID }) else { return nil }
                 // let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
                 guard let win = content.windows.first(where: { $0.windowID == winId }) else {
-                    print("windowID not found")
+                    print("window not found")
                     return nil
                 }
                 let filter = SCContentFilter(desktopIndependentWindow: win)
@@ -1283,17 +1316,7 @@ extension AXUIElement {
         }
         #endif
 
-        guard let cgImage = CGWindowListCreateImage(
-            frame,
-            .optionIncludingWindow,
-            winId,
-            [.boundsIgnoreFraming, .bestResolution]
-        ) else {
-            print("CGWindowListCreateImage failed. If you call this function from outside of a GUI security session or when no window server is running, this function returns NULL")
-            return nil
-        }
-
-        return cgImage
+        return nil
     }
 
     /// save the screenshot of current AXUIElement, and return it
