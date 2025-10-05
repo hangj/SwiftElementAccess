@@ -499,16 +499,14 @@ extension AXUIElement {
         set(v) {
             if self.isApplicationUIElement {
                 self.activate()
-                if !self.isAppFrontmost {
-                    let e = AXUIElementSetAttributeValue(self, kAXFrontmostAttribute as CFString, v as CFTypeRef)
-                    if e != .success {
-                        print("setAppFrontmost failed:", e)
-                        return
-                    }
-                    print("setAppFrontmost success")
+                let e = AXUIElementSetAttributeValue(self, kAXFrontmostAttribute as CFString, v as CFTypeRef)
+                if e != .success {
+                    print("setAppFrontmost failed:", e)
+                    return
                 }
+                print("setAppFrontmost success")
             } else {
-                self.appUIElement.isAppFrontmost = true
+                self.appUIElement.isAppFrontmost = v
             }
         }
     }
@@ -526,15 +524,63 @@ extension AXUIElement {
         }
         set(v) {
             if self.isWindowUIElement {
-                while !self.isWindowFrontmost {
-                    let e = AXUIElementSetAttributeValue(self, kAXMainAttribute as CFString, v as CFTypeRef)
-                    if e != .success {
-                        print("setWindowFrontmost failed:", e)
-                        break
-                    }
+                if isMinimized {
+                    isMinimized = false
+                }
+                let e = AXUIElementSetAttributeValue(self, kAXMainAttribute as CFString, v as CFTypeRef)
+                if e != .success {
+                    print("setWindowFrontmost failed:", e)
+                    return
                 }
             } else {
-                self.window?.isWindowFrontmost = true
+                self.window?.isWindowFrontmost = v
+            }
+        }
+    }
+
+    public var isMinimized: Bool {
+        get {
+            if self.isWindowUIElement {
+                if let b: Bool = self.valueOfAttr(kAXMinimizedAttribute) {
+                    return b
+                }
+                return false
+            } else {
+                return self.window?.isMinimized ?? false
+            }
+        }
+        set(v) {
+            if self.isWindowUIElement {
+                // let _ = self.performAction(kAXRaiseAction)
+                let e = AXUIElementSetAttributeValue(self, kAXMinimizedAttribute as CFString, v as CFTypeRef)
+                if e != .success {
+                    print("setIsMinimized failed:", e)
+                }
+            } else {
+                self.window?.isMinimized = v
+            }
+        }
+    }
+
+    public var isFullscreen: Bool {
+        get {
+            if self.isWindowUIElement {
+                if let b: Bool = self.valueOfAttr(kAXFullscreenAttribute) {
+                    return b
+                }
+                return false
+            } else {
+                return self.window?.isFullscreen ?? false
+            }
+        }
+        set(v) {
+            if self.isWindowUIElement {
+                let e = AXUIElementSetAttributeValue(self, kAXFullscreenAttribute as CFString, v as CFTypeRef)
+                if e != .success {
+                    print("setIsMinimized failed:", e)
+                }
+            } else {
+                self.window?.isFullscreen = v
             }
         }
     }
@@ -957,6 +1003,47 @@ extension AXUIElement {
             }
         }
         return []
+    }
+
+    /// we combine both the normal approach and brute-force to get all possible windows
+    /// with only normal approach: we miss other-Spaces windows
+    /// with only brute-force approach: we miss windows when the app launches (e.g. launch Note.app: first window is not found by brute-force)
+    public func allWindows() -> [AXUIElement] {
+        let aWindows = windows
+        let bWindows = AXUIElement.windowsByBruteForce(pid)
+        return Array(Set(aWindows + bWindows))
+    }
+
+    /// tests have shown that this ID has a range going from 0 to probably UInt.MAX
+    /// it starts at 0 for each app, and increments over time, for each new UI element
+    /// this means that long-lived apps (e.g. Finder) may have high IDs
+    /// we don't know how high it can go, and if it wraps around
+    typealias AXUIElementID = UInt64
+    /// brute-force getting the windows of a process by iterating over AXUIElementID one by one
+    private static func windowsByBruteForce(_ pid: pid_t) -> [AXUIElement] {
+        // we use this to call _AXUIElementCreateWithRemoteToken; we reuse the object for performance
+        // tests showed that this remoteToken is 20 bytes: 4 + 4 + 4 + 8; the order of bytes matters
+        var remoteToken = Data(count: 20)
+        remoteToken.replaceSubrange(0..<4, with: withUnsafeBytes(of: pid) { Data($0) })
+        remoteToken.replaceSubrange(4..<8, with: withUnsafeBytes(of: Int32(0)) { Data($0) })
+        remoteToken.replaceSubrange(8..<12, with: withUnsafeBytes(of: Int32(0x636f636f)) { Data($0) })
+        var axWindows = [AXUIElement]()
+        // we iterate to 1000 as a tradeoff between performance, and missing windows of long-lived processes
+        for axUiElementId: AXUIElementID in 1..<100000 {
+            remoteToken.replaceSubrange(12..<20, with: withUnsafeBytes(of: axUiElementId) { Data($0) })
+            if let axUiElement = _AXUIElementCreateWithRemoteToken(remoteToken as CFData)?.takeRetainedValue(){
+                let role = axUiElement.role
+                if role.isEmpty {continue}
+
+                let subrole = axUiElement.subRole
+                if subrole.isEmpty { continue }
+
+                if [kAXStandardWindowSubrole, kAXDialogSubrole].contains(subrole) {
+                    axWindows.append(axUiElement)
+                }
+            }
+        }
+        return axWindows
     }
 
     public var window: AXUIElement? {
