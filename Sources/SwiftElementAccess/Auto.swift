@@ -1,6 +1,7 @@
-
-
 import Cocoa
+#if canImport(ScreenCaptureKit)
+import ScreenCaptureKit
+#endif
 
 
 public class Auto {
@@ -21,7 +22,7 @@ public class Auto {
         }
     }
 
-    public static func click(_ key: Key, masks: CGEventFlags = [], toPid pid: pid_t? = nil) {
+    public static func sendKey(_ key: Key, masks: CGEventFlags = [], toPid pid: pid_t? = nil) {
         key.click(masks: masks, toPid: pid)
     }
 
@@ -53,6 +54,88 @@ public class Auto {
                             mouseCursorPosition: adjustedPoint, mouseButton: CGMouseButton.left)
         down?.post(tap: CGEventTapLocation.cghidEventTap)
         up?.post(tap: CGEventTapLocation.cghidEventTap)
+    }
+
+    public static func captureImage(screen: NSScreen, path: String) async -> CGImage? {
+        guard let cgImage = await captureImage(screen: screen) else {
+            return nil
+        }
+
+        let img = CIImage(cgImage: cgImage)
+        do {
+            try CIContext(options: nil).writePNGRepresentation(of: img, to: URL(fileURLWithPath: path), format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
+        }catch{
+            print("image save error:", error)
+        }
+
+        return cgImage
+    }
+
+    public static func captureImage(screen: NSScreen) async -> CGImage? {
+        var origin = NSScreen.main!.frame.origin
+        origin.y = NSScreen.main!.frame.maxY
+
+        var frame = screen.frame
+        frame.origin.y = origin.y - frame.maxY
+        frame.origin.x = frame.minX - origin.x
+
+        return await captureImage(screenBounds: frame)
+    }
+
+    /// screenBounds: origin at upper-left corner of the main display
+    /// If you want the whole screenshot of all the screens, you can pass NSRect.infinite to the rect
+    public static func captureImage(screenBounds: CGRect, path: String) async -> CGImage? {
+        guard let cgImage = await captureImage(screenBounds: screenBounds) else {
+            return nil
+        }
+
+        let img = CIImage(cgImage: cgImage)
+        do {
+            try CIContext(options: nil).writePNGRepresentation(of: img, to: URL(fileURLWithPath: path), format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
+        }catch{
+            print("image save error:", error)
+        }
+
+        return cgImage
+    }
+
+    /// screenBounds: origin at upper-left corner of the main display
+    /// If you want the whole screenshot of all the screens, you can pass NSRect.infinite to the rect
+    public static func captureImage(screenBounds: NSRect) async -> CGImage? {
+        var rect = screenBounds
+
+        if screenBounds == .infinite || screenBounds == .null {
+            var origin = NSScreen.main!.frame.origin
+            origin.y = NSScreen.main!.frame.maxY
+
+            var frame = NSScreen.main!.frame
+            NSScreen.screens.forEach { frame = frame.union($0.frame) }
+            frame.origin.y = origin.y - frame.maxY
+            frame.origin.x = frame.minX - origin.x
+
+            rect = frame
+        }
+
+        if let cgImage = CGWindowListCreateImage(
+            rect,
+            .optionOnScreenOnly,
+            kCGNullWindowID,
+            .bestResolution
+        ) {
+            return cgImage
+        }
+
+        #if canImport(ScreenCaptureKit)
+            if #available(macOS 15.2, *) {
+                do {
+                    return try await SCScreenshotManager.captureImage(in: rect)
+                }catch{
+                    print("error:", error)
+                }
+            }
+        #endif
+
+        return nil
     }
 
 
@@ -110,6 +193,34 @@ public class Auto {
         public static let seven = _7
         public static let eight = _8
         public static let nine = _9
+
+        public static let a = A
+        public static let b = B
+        public static let c = C
+        public static let d = D
+        public static let e = E
+        public static let f = F
+        public static let g = G
+        public static let h = H
+        public static let i = I
+        public static let j = J
+        public static let k = K
+        public static let l = L
+        public static let m = M
+        public static let n = N
+        public static let o = O
+        public static let p = P
+        public static let q = Q
+        public static let r = R
+        public static let s = S
+        public static let t = T
+        public static let u = U
+        public static let v = V
+        public static let w = W
+        public static let x = X
+        public static let y = Y
+        public static let z = Z
+
         case rightBracket = 0x1E
         case O = 0x1F
         case U = 0x20
@@ -136,6 +247,7 @@ public class Auto {
         case keypadClear = 0x47
         case keypadDivide = 0x4B
         case keypadEnter = 0x4C
+        public static let enter = keypadEnter
         case keypadMimus = 0x4E
         case keypadEquals = 0x51
         case keypad0 = 0x52
@@ -153,6 +265,7 @@ public class Auto {
 
         case `return` = 0x24
         public static let returnKey = Self.return
+
         case tab = 0x30
         case space = 0x31
         case delete = 0x33

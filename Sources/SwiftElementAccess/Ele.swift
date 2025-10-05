@@ -1164,84 +1164,6 @@ extension AXUIElement {
         return nil
     }
 
-    public static func captureImage(screen: NSScreen, path: String) async -> CGImage? {
-        guard let cgImage = await captureImage(screen: screen) else {
-            return nil
-        }
-
-        let img = CIImage(cgImage: cgImage)
-        do {
-            try CIContext(options: nil).writePNGRepresentation(of: img, to: URL(fileURLWithPath: path), format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
-        }catch{
-            print("image save error:", error)
-        }
-
-        return cgImage
-    }
-
-    public static func captureImage(screen: NSScreen) async -> CGImage? {
-        var origin = NSScreen.main!.frame.origin
-        origin.y = NSScreen.main!.frame.maxY
-
-        var frame = screen.frame
-        frame.origin.y = origin.y - frame.maxY
-        frame.origin.x = frame.minX - origin.x
-
-        return await captureImage(screenBounds: frame)
-    }
-
-    /// screenBounds: origin at upper-left corner of the main display
-    /// If you want the whole screenshot of all the screens, you can pass NSRect.infinite to the rect
-    public static func captureImage(screenBounds: CGRect, path: String) async -> CGImage? {
-        guard let cgImage = await captureImage(screenBounds: screenBounds) else {
-            return nil
-        }
-
-        let img = CIImage(cgImage: cgImage)
-        do {
-            try CIContext(options: nil).writePNGRepresentation(of: img, to: URL(fileURLWithPath: path), format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
-        }catch{
-            print("image save error:", error)
-        }
-
-        return cgImage
-    }
-
-    /// screenBounds: origin at upper-left corner of the main display
-    /// If you want the whole screenshot of all the screens, you can pass NSRect.infinite to the rect
-    public static func captureImage(screenBounds: NSRect) async -> CGImage? {
-        var rect = screenBounds
-
-        if screenBounds == .infinite || screenBounds == .null {
-            var origin = NSScreen.main!.frame.origin
-            origin.y = NSScreen.main!.frame.maxY
-
-            var frame = NSScreen.main!.frame
-            NSScreen.screens.forEach { frame = frame.union($0.frame) }
-            frame.origin.y = origin.y - frame.maxY
-            frame.origin.x = frame.minX - origin.x
-
-            rect = frame
-        }
-
-        #if canImport(ScreenCaptureKit)
-            if #available(macOS 15.2, *) {
-                do {
-                    return try await SCScreenshotManager.captureImage(in: rect)
-                }catch{
-                    print("error:", error)
-                }
-            }
-        #endif
-
-        return CGWindowListCreateImage(
-            rect,
-            .optionOnScreenOnly,
-            kCGNullWindowID,
-            .bestResolution
-        )
-    }
-
     /// return the screenshot of current AXUIElement
     public func take_screenshot() async -> CGImage? {
         guard let win = self.window else {
@@ -1361,61 +1283,12 @@ extension AXUIElement {
         return qrCodes
     }
 
-    // -------------------------------------
-
-    public static func sendKeyCode(_ keyCode: CGKeyCode, masks: CGEventFlags = [], toPid pid: pid_t? = nil) {
-        let source = CGEventSource(stateID: .hidSystemState)
-        guard let down = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
-            let up = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else {
-            print("CGEvent init failed")
+    public func sendKey(_ key: Auto.Key, masks: CGEventFlags = []) {
+        let pid = pid
+        if pid < 0 {
+            print("Invalid pid")
             return
         }
-
-        down.flags = masks
-        up.flags = masks
-
-        if let pid = pid, pid >= 0 {
-            down.postToPid(pid)
-            up.postToPid(pid)
-        } else {
-            down.post(tap: .cghidEventTap)
-            up.post(tap: .cghidEventTap)
-        }
-    }
-
-    public static func copy(str: String) -> Bool {
-        let pasteboard = NSPasteboard.general
-        pasteboard.declareTypes([.string], owner: nil)
-        return pasteboard.setString(str, forType: .string)
-    }
-
-    /// Move the mouse to a point in global screen coordinates(origin at upper-left corner of the main display)
-    public static func mouseMove(to: NSPoint) -> Bool {
-        // Need to read the mouse location first, Or the following `CGDisplayMoveCursorToPoint(0, to)` call may stuck
-        let _ = NSEvent.mouseLocation // The current mouse location in screen coordinates, the screen coordinate system's origin is at the lower-left corner of the primary screen, with positive values increasing to the right and up
-
-        let displayID = NSScreen.screens[0].deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID ?? 0
-
-        // https://developer.apple.com/documentation/coregraphics/cgdisplaymovecursortopoint(_:_:)
-        // Moves the mouse cursor to a specified point relative to the upper-left corner of the displayID
-        return CGDisplayMoveCursorToPoint(displayID, to) == .success
-    }
-
-    /// Perform a left click at a point in display coordinates(origin is at the upper-left corner)
-    /// `AXUIElement.checkIsProcessTrusted()` first
-    public static func mouseLeftClick(position: NSPoint? = nil) {
-        var mouseLoc = NSEvent.mouseLocation
-        mouseLoc.y = NSScreen.screens[0].frame.height - mouseLoc.y
-
-        // The coordinates of a point in local display space. The origin is the upper-left corner of the specified display.
-        let adjustedPoint = position ?? mouseLoc
-
-        let source = CGEventSource(stateID: CGEventSourceStateID.hidSystemState)
-        let down = CGEvent(mouseEventSource: source, mouseType: CGEventType.leftMouseDown,
-                            mouseCursorPosition: adjustedPoint, mouseButton: CGMouseButton.left)
-        let up = CGEvent(mouseEventSource: source, mouseType: CGEventType.leftMouseUp,
-                            mouseCursorPosition: adjustedPoint, mouseButton: CGMouseButton.left)
-        down?.post(tap: CGEventTapLocation.cghidEventTap)
-        up?.post(tap: CGEventTapLocation.cghidEventTap)
+        key.click(masks: masks, toPid: pid)
     }
 }
