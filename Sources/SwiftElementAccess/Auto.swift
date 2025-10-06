@@ -1,4 +1,5 @@
 import Cocoa
+import IOKit.pwr_mgt
 #if canImport(ScreenCaptureKit)
 import ScreenCaptureKit
 #endif
@@ -56,6 +57,7 @@ public class Auto {
         up?.post(tap: CGEventTapLocation.cghidEventTap)
     }
 
+    /// save and return the screenshot of the screen
     public static func captureImage(screen: NSScreen, path: String) async -> CGImage? {
         guard let cgImage = await captureImage(screen: screen) else {
             return nil
@@ -71,6 +73,7 @@ public class Auto {
         return cgImage
     }
 
+    /// return the screenshot of the screen
     public static func captureImage(screen: NSScreen) async -> CGImage? {
         var origin = NSScreen.main!.frame.origin
         origin.y = NSScreen.main!.frame.maxY
@@ -136,6 +139,48 @@ public class Auto {
         #endif
 
         return nil
+    }
+
+    private static var noSleepAssertionID: IOPMAssertionID = 0
+    private static var noSleepEnabled = false // Could probably be replaced by a boolean value, for example 'isBlockingSleep', just make sure 'IOPMAssertionRelease' doesn't get called, if 'IOPMAssertionCreateWithName' failed.
+
+    /// This function acts like `caffeinate -id` which prevents the system from sleeping due to inactivity.
+    public static func disableScreenSleep(reason: String = "Unknown reason") -> Bool {
+        if noSleepEnabled { return true }
+        let r = IOPMAssertionCreateWithName(kIOPMAssertionTypeNoDisplaySleep as CFString,
+                                                IOPMAssertionLevel(kIOPMAssertionLevelOn),
+                                                reason as CFString,
+                                                &noSleepAssertionID)
+        if r == kIOReturnSuccess {
+            noSleepEnabled = true
+            return true
+        }
+        return false
+    }
+
+    public static func enableScreenSleep() -> Bool {
+        if !noSleepEnabled { return true }
+
+        if IOPMAssertionRelease(noSleepAssertionID) == kIOReturnSuccess {
+            noSleepEnabled = false
+            return true
+        }
+        return false
+    }
+
+    public static func lockFile(_ path: String) throws -> Bool {
+        let fd = open(path, O_CREAT | O_RDWR, 0o644)
+        if fd < 0 {
+            let cErrno = errno
+            // Get a human-readable description of the error
+            let errorMessage = String(cString: strerror(cErrno))
+            let userInfo: [String: Any] = [
+                NSLocalizedDescriptionKey: "C function failed with errno \(cErrno): \(errorMessage)"
+            ]
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(cErrno), userInfo: userInfo)
+        }
+        var lock = flock(l_start: 0, l_len: 0, l_pid: getpid(), l_type: Int16(F_WRLCK), l_whence: Int16(SEEK_SET))
+        return fcntl(fd, F_SETLK, &lock) == 0
     }
 
 
