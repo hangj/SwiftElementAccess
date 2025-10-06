@@ -994,6 +994,7 @@ extension AXUIElement {
         return []
     }
 
+    /// this will typically only return windows that are visible in the current space.
     public var windows: [AXUIElement] {
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self, kAXWindowsAttribute as CFString, &value)
