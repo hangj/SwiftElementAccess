@@ -4,6 +4,27 @@ import IOKit.pwr_mgt
 import ScreenCaptureKit
 #endif
 
+public extension CGEventFlags {
+    /* Device-independent modifier key bits. */
+    static let command = maskCommand
+    static let control = maskControl
+    static let option = maskAlternate
+    static let alt = option
+    static let alternate = alt
+    static let shift = maskShift
+    static let alphaShift = maskAlphaShift
+    static let capsLock = alphaShift
+
+    /* Special key identifiers. */
+    static let help = maskHelp
+    static let secondaryFn = maskSecondaryFn
+
+    /* Identifies key events from numeric keypad area on extended keyboards. */
+    static let numericPad = maskNumericPad
+
+    /* Indicates if mouse/pen movement events are not being coalesced */
+    static let nonCoalesced = maskNonCoalesced
+}
 
 public class Auto {
     public static func copy(str: String) -> Bool {

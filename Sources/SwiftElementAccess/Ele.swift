@@ -245,12 +245,12 @@ extension AXUIElement {
 
         var obs: AXObserver?
         let e = AXObserverCreate(pid, {AXUIElement.observerCallback($0, $1, $2, $3)}, &obs)
-        if e == .success {
-            CFRunLoopAddSource(RunLoop.current.getCFRunLoop(), AXObserverGetRunLoopSource(obs!), .defaultMode)
-            Self.observers[pid] = obs!
+        if e == .success, let obs = obs {
+            CFRunLoopAddSource(RunLoop.current.getCFRunLoop(), AXObserverGetRunLoopSource(obs), .defaultMode)
+            Self.observers[pid] = obs
             return obs
         }
-        print("AXObserverCreate error:", e)
+        print("AXObserverCreate error:", e.rawValue)
         return nil
     }
 
@@ -501,7 +501,7 @@ extension AXUIElement {
                 self.activate()
                 let e = AXUIElementSetAttributeValue(self, kAXFrontmostAttribute as CFString, v as CFTypeRef)
                 if e != .success {
-                    print("setAppFrontmost failed:", e)
+                    print("setAppFrontmost failed:", e.rawValue)
                     return
                 }
                 print("setAppFrontmost success")
@@ -529,7 +529,7 @@ extension AXUIElement {
                 }
                 let e = AXUIElementSetAttributeValue(self, kAXMainAttribute as CFString, v as CFTypeRef)
                 if e != .success {
-                    print("setWindowFrontmost failed:", e)
+                    print("setWindowFrontmost failed:", e.rawValue)
                     return
                 }
             } else {
@@ -554,7 +554,7 @@ extension AXUIElement {
                 // let _ = self.performAction(kAXRaiseAction)
                 let e = AXUIElementSetAttributeValue(self, kAXMinimizedAttribute as CFString, v as CFTypeRef)
                 if e != .success {
-                    print("setIsMinimized failed:", e)
+                    print("setIsMinimized failed:", e.rawValue)
                 }
             } else {
                 self.window?.isMinimized = v
@@ -577,7 +577,7 @@ extension AXUIElement {
             if self.isWindowUIElement {
                 let e = AXUIElementSetAttributeValue(self, kAXFullscreenAttribute as CFString, v as CFTypeRef)
                 if e != .success {
-                    print("setIsMinimized failed:", e)
+                    print("setIsMinimized failed:", e.rawValue)
                 }
             } else {
                 self.window?.isFullscreen = v
@@ -857,7 +857,7 @@ extension AXUIElement {
     public func setValue<T>(_ v: T) -> Bool {
         let e = AXUIElementSetAttributeValue(self, kAXValueAttribute as CFString, v as CFTypeRef)
         if e != .success {
-            print("setValue failed:", e)
+            print("setValue failed:", e.rawValue)
         }
         return e == .success
     }
@@ -899,7 +899,7 @@ extension AXUIElement {
             let ref = AXValueCreate(.cgPoint, &pos)
             let e = AXUIElementSetAttributeValue(self, kAXPositionAttribute as CFString, ref as CFTypeRef)
             if e != .success {
-                print("set position failed:", e)
+                print("set position failed:", e.rawValue)
             }
         }
     }   
@@ -920,7 +920,7 @@ extension AXUIElement {
             let ref = AXValueCreate(.cgSize, &sz)
             let e = AXUIElementSetAttributeValue(self, kAXSizeAttribute as CFString, ref as CFTypeRef)
             if e != .success {
-                print("set size failed:", e)
+                print("set size failed:", e.rawValue)
             }
         }
     }
