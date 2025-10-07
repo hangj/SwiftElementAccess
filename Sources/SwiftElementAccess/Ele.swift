@@ -499,12 +499,11 @@ extension AXUIElement {
         set(v) {
             if self.isApplicationUIElement {
                 self.activate()
-                let e = AXUIElementSetAttributeValue(self, kAXFrontmostAttribute as CFString, v as CFTypeRef)
-                if e != .success {
-                    print("setAppFrontmost failed:", e.rawValue)
-                    return
+                if setAttr(kAXFrontmostAttribute, value: v) {
+                    print("setAppFrontmost success")
+                } else {
+                    print("setAppFrontmost failed")
                 }
-                print("setAppFrontmost success")
             } else {
                 self.appUIElement.isAppFrontmost = v
             }
@@ -527,11 +526,7 @@ extension AXUIElement {
                 if isMinimized {
                     isMinimized = false
                 }
-                let e = AXUIElementSetAttributeValue(self, kAXMainAttribute as CFString, v as CFTypeRef)
-                if e != .success {
-                    print("setWindowFrontmost failed:", e.rawValue)
-                    return
-                }
+                let _ = setAttr(kAXMainAttribute, value: v)
             } else {
                 self.window?.isWindowFrontmost = v
             }
@@ -552,10 +547,7 @@ extension AXUIElement {
         set(v) {
             if self.isWindowUIElement {
                 // let _ = self.performAction(kAXRaiseAction)
-                let e = AXUIElementSetAttributeValue(self, kAXMinimizedAttribute as CFString, v as CFTypeRef)
-                if e != .success {
-                    print("setIsMinimized failed:", e.rawValue)
-                }
+                let _ = setAttr(kAXMinimizedAttribute, value: v)
             } else {
                 self.window?.isMinimized = v
             }
@@ -575,10 +567,7 @@ extension AXUIElement {
         }
         set(v) {
             if self.isWindowUIElement {
-                let e = AXUIElementSetAttributeValue(self, kAXFullscreenAttribute as CFString, v as CFTypeRef)
-                if e != .success {
-                    print("setIsMinimized failed:", e.rawValue)
-                }
+                let _ = setAttr(kAXFullscreenAttribute, value: v)
             } else {
                 self.window?.isFullscreen = v
             }
@@ -703,11 +692,13 @@ extension AXUIElement {
         var arrNames: CFArray?
         let err = AXUIElementCopyAttributeNames(self, &arrNames)
         if err == .success {
-            if let arr = arrNames as? [String] {
-                return arr
-            }
+            return (arrNames as? [String] ?? [])
         }
         return []
+    }
+
+    public func valueOfAttr<T>(_ attr: String, type: T.Type) -> T? {
+        return valueOfAttr(attr)
     }
 
     public func valueOfAttr<T>(_ attr: String) -> T? {
@@ -717,6 +708,17 @@ extension AXUIElement {
             return value as? T
         }
         return nil
+    }
+
+    public func setAttr<T>(_ attr: String, value: T) -> Bool {
+        guard canSet(attr: attr) else { return false }
+
+        let e = AXUIElementSetAttributeValue(self, attr as CFString, value as CFTypeRef)
+        if e != .success {
+            print("set \(attr) \(value) failed:", e.rawValue)
+            return false
+        }
+        return true
     }
 
     public var actionNames: [String] {
@@ -757,17 +759,11 @@ extension AXUIElement {
     }
 
     public var role: String {
-        if let s: String = self.valueOfAttr(kAXRoleAttribute) {
-            return s
-        }
-        return ""
+        return self.valueOfAttr(kAXRoleAttribute, type: String.self) ?? ""
     }
 
     public var subRole: String {
-        if let s: String = self.valueOfAttr(kAXSubroleAttribute) {
-            return s
-        }
-        return ""
+        return self.valueOfAttr(kAXSubroleAttribute, type: String.self) ?? "" 
     }
 
     /// Example:
@@ -841,25 +837,15 @@ extension AXUIElement {
     }
 
     public func value<T>() -> T? {
-        if let v: T = self.valueOfAttr(kAXValueAttribute) {
-            return v
-        }
-        return nil
+        return self.valueOfAttr(kAXValueAttribute, type: T.self)
     }
 
     public func value<T>(type: T.Type) -> T? {
-        if let v: T = self.valueOfAttr(kAXValueAttribute) {
-            return v
-        }
-        return nil
+        return self.valueOfAttr(kAXValueAttribute, type: type)
     }
 
     public func setValue<T>(_ v: T) -> Bool {
-        let e = AXUIElementSetAttributeValue(self, kAXValueAttribute as CFString, v as CFTypeRef)
-        if e != .success {
-            print("setValue failed:", e.rawValue)
-        }
-        return e == .success
+        return setAttr(kAXValueAttribute, value: v)
     }
 
     public var isEnabled: Bool {
@@ -897,10 +883,7 @@ extension AXUIElement {
         set(pos){
             guard var pos = pos else { return }
             let ref = AXValueCreate(.cgPoint, &pos)
-            let e = AXUIElementSetAttributeValue(self, kAXPositionAttribute as CFString, ref as CFTypeRef)
-            if e != .success {
-                print("set position failed:", e.rawValue)
-            }
+            let _ = setAttr(kAXPositionAttribute, value: ref)
         }
     }   
 
@@ -918,10 +901,7 @@ extension AXUIElement {
         set(sz) {
             guard var sz = sz else { return }
             let ref = AXValueCreate(.cgSize, &sz)
-            let e = AXUIElementSetAttributeValue(self, kAXSizeAttribute as CFString, ref as CFTypeRef)
-            if e != .success {
-                print("set size failed:", e.rawValue)
-            }
+            let _ = setAttr(kAXSizeAttribute, value: ref)
         }
     }
 
@@ -944,8 +924,8 @@ extension AXUIElement {
     public var parent: AXUIElement?{
         var value : AnyObject?
         let axError = AXUIElementCopyAttributeValue(self, kAXParentAttribute as CFString, &value)
-        if axError == .success {
-            return (value as! AXUIElement)
+        if axError == .success, let v = value, CFGetTypeID(v) == AXUIElementGetTypeID() {
+            return (v as! AXUIElement)
         }
         return nil
     }
@@ -953,10 +933,8 @@ extension AXUIElement {
     public var children: [AXUIElement] {
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self, kAXChildrenAttribute as CFString, &value)
-        if err == .success {
-            if let arr = value as? [AXUIElement] {
-                return arr
-            }
+        if err == .success, let v = value, CFGetTypeID(v) == CFArrayGetTypeID() {
+            return v as! [AXUIElement]
         }
         return []
     }
@@ -964,10 +942,8 @@ extension AXUIElement {
     public var visibleChildren: [AXUIElement] {
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self, kAXVisibleChildrenAttribute as CFString, &value)
-        if err == .success {
-            if let arr = value as? [AXUIElement] {
-                return arr
-            }
+        if err == .success, let v = value, CFGetTypeID(v) == CFArrayGetTypeID() {
+            return v as! [AXUIElement]
         }
         return []
     }
@@ -975,10 +951,8 @@ extension AXUIElement {
     public var selectedChildren: [AXUIElement] {
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self, kAXSelectedChildrenAttribute as CFString, &value)
-        if err == .success {
-            if let arr = value as? [AXUIElement] {
-                return arr
-            }
+        if err == .success, let v = value, CFGetTypeID(v) == CFArrayGetTypeID() {
+            return v as! [AXUIElement]
         }
         return []
     }
@@ -986,10 +960,8 @@ extension AXUIElement {
     public var contents: [AXUIElement] {
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self, kAXContentsAttribute as CFString, &value)
-        if err == .success {
-            if let arr = value as? [AXUIElement] {
-                return arr
-            }
+        if err == .success, let v = value, CFGetTypeID(v) == CFArrayGetTypeID() {
+            return v as! [AXUIElement]
         }
         return []
     }
@@ -998,10 +970,8 @@ extension AXUIElement {
     public var windows: [AXUIElement] {
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self, kAXWindowsAttribute as CFString, &value)
-        if err == .success {
-            if let arr = value as? [AXUIElement] {
-                return arr
-            }
+        if err == .success, let v = value, CFGetTypeID(v) == CFArrayGetTypeID() {
+            return v as! [AXUIElement]
         }
         return []
     }
@@ -1051,12 +1021,8 @@ extension AXUIElement {
         if self.isWindowUIElement { return self }
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self, kAXWindowAttribute as CFString, &value)
-        if err == .success {
-            if let v = value {
-                if CFGetTypeID(v) == AXUIElementGetTypeID() {
-                    return (v as! AXUIElement)
-                }
-            }
+        if err == .success, let v = value, CFGetTypeID(v) == AXUIElementGetTypeID() {
+            return (v as! AXUIElement)
         }
         return nil
     }
@@ -1064,12 +1030,8 @@ extension AXUIElement {
     public var mainWindow: AXUIElement? {
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self, kAXMainWindowAttribute as CFString, &value)
-        if err == .success {
-            if let v = value {
-                if CFGetTypeID(v) == AXUIElementGetTypeID() {
-                    return (v as! AXUIElement)
-                }
-            }
+        if err == .success, let v = value, CFGetTypeID(v) == AXUIElementGetTypeID() {
+            return (v as! AXUIElement)
         }
         return nil
     }
@@ -1077,12 +1039,8 @@ extension AXUIElement {
     public var focusedWindow: AXUIElement? {
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self, kAXFocusedWindowAttribute as CFString, &value)
-        if err == .success {
-            if let v = value {
-                if CFGetTypeID(v) == AXUIElementGetTypeID() {
-                    return (v as! AXUIElement)
-                }
-            }
+        if err == .success, let v = value, CFGetTypeID(v) == AXUIElementGetTypeID() {
+            return (v as! AXUIElement)
         }
         return nil
     }
@@ -1090,10 +1048,8 @@ extension AXUIElement {
     public var focusElements: [AXUIElement] {
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self, kAXSharedFocusElementsAttribute as CFString, &value)
-        if err == .success {
-            if let arr = value as? [AXUIElement] {
-                return arr
-            }
+        if err == .success, let v = value, CFGetTypeID(v) == CFArrayGetTypeID() {
+            return v as! [AXUIElement]
         }
         return []
     }
@@ -1101,12 +1057,8 @@ extension AXUIElement {
     public var menuBar: AXUIElement? {
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self, kAXMenuBarAttribute as CFString, &value)
-        if err == .success {
-            if let v = value {
-                if CFGetTypeID(v) == AXUIElementGetTypeID() {
-                    return (v as! AXUIElement)
-                }
-            }
+        if err == .success, let v = value, CFGetTypeID(v) == AXUIElementGetTypeID() {
+            return (v as! AXUIElement)
         }
         return nil
     }
@@ -1114,12 +1066,8 @@ extension AXUIElement {
     public var extrasMenuBar: AXUIElement? {
         var value : AnyObject?
         let err = AXUIElementCopyAttributeValue(self, kAXExtrasMenuBarAttribute as CFString, &value)
-        if err == .success {
-            if let v = value {
-                if CFGetTypeID(v) == AXUIElementGetTypeID() {
-                    return (v as! AXUIElement)
-                }
-            }
+        if err == .success, let v = value, CFGetTypeID(v) == AXUIElementGetTypeID() {
+            return (v as! AXUIElement)
         }
         return nil
     }
