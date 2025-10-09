@@ -206,10 +206,27 @@ extension AXUIElement {
         return ret
     }
 
+    public static var frontmostApplication: NSRunningApplication?
+
     public static func fromFrontMostApplication() -> AXUIElement? {
-        if let app = NSWorkspace.shared.frontmostApplication {
+        struct Once {
+            static let once = {
+                AXUIElement.frontmostApplication = NSWorkspace.shared.frontmostApplication
+                // https://stackoverflow.com/questions/32533525/nsworkspaces-frontmostapplication-doesnt-change-after-initial-use
+                NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: nil) { noti in
+                    AXUIElement.frontmostApplication = noti.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+                }
+
+                return true
+            }()
+        }
+
+        let _ = Once.once
+
+        if let app = frontmostApplication {
             return AXUIElement.fromPid(app.processIdentifier)
         }
+
         return nil
     }
 
