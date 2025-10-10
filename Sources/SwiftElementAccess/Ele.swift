@@ -1095,9 +1095,15 @@ extension AXUIElement {
         if !isWindowFrontmost {
             isWindowFrontmost = true
         }
-        Thread.sleep(forTimeInterval: 0.01)
+        Thread.sleep(forTimeInterval: 0.1)
 
-        Auto.mouseLeftClick(position: NSPoint(x: frame.midX, y: frame.midY))
+        let position = NSPoint(x: frame.midX, y: frame.midY)
+        guard AXUIElement.fromPosition(position)?.pid == self.pid else {
+            print("There is other app showing overlay the current app")
+            return
+        }
+
+        Auto.mouseLeftClick(position: position)
     }
 
     public func toDict(unique: inout Set<AXUIElement>) -> Any {
