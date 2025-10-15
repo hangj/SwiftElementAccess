@@ -1091,14 +1091,15 @@ extension AXUIElement {
 
         if !isAppFrontmost {
             isAppFrontmost = true
+            Thread.sleep(forTimeInterval: 0.05)
         }
         if !isWindowFrontmost {
             isWindowFrontmost = true
+            Thread.sleep(forTimeInterval: 0.05)
         }
-        Thread.sleep(forTimeInterval: 0.1)
 
         let position = NSPoint(x: frame.midX, y: frame.midY)
-        guard AXUIElement.fromPosition(position)?.pid == self.pid else {
+        guard let ele = AXUIElement.fromPosition(position), ele.pid == self.pid, ele.windowId == self.windowId else {
             print("There is other app showing overlay the current app")
             return
         }
