@@ -1024,7 +1024,18 @@ extension AXUIElement {
         if err == .success, let v = value, CFGetTypeID(v) == AXUIElementGetTypeID() {
             return (v as! AXUIElement)
         }
-        return nil
+        /// The above code does not always work, so we do it by ourselves
+        var e = self
+        while true {
+            if e.role == kAXWindowRole {
+                return e
+            }
+            if let p = e.parent {
+                e = p
+            } else {
+                return nil
+            }
+        }
     }
 
     public var mainWindow: AXUIElement? {
@@ -1078,6 +1089,17 @@ extension AXUIElement {
         if err == .success {
             if let v = value {
                 return v as? Bool
+            }
+        }
+        return nil
+    }
+
+    public var identifier: String? {
+        var value: AnyObject?
+        let err = AXUIElementCopyAttributeValue(self, kAXIdentifierAttribute as CFString, &value)
+        if err == .success {
+            if let v = value {
+                return v as? String
             }
         }
         return nil
