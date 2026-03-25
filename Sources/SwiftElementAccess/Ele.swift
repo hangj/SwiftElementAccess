@@ -1,5 +1,7 @@
 import Cocoa
 import MyObjCTarget
+import Vision
+import VisionKit
 
 #if canImport(ScreenCaptureKit)
 import ScreenCaptureKit
@@ -149,6 +151,7 @@ extension AXUIElement {
     static var observers: [pid_t: AXObserver] = [:]
     static var notificationCallbacks: [AXUIElement: Callback] = [:]
     static var notifications: [AXUIElement: [String]] = [:]
+    public static var ocr_detector: ((CGImage) async -> [(String, CGRect)]?)?
 
     /// https://stackoverflow.com/a/50901425/1936057
     /// It appears, in 10.13.3 at least, that applications which are using the app sandbox will not have the alert shown. If you turn off app sandbox in the project entitlements then the alert is shown
@@ -1363,6 +1366,44 @@ extension AXUIElement {
         let qrCodes = features.compactMap { $0 as? CIQRCodeFeature }.compactMap { $0.messageString }
 
         return qrCodes
+    }
+
+    /// https://developer.apple.com/documentation/vision/recognizing-text-in-images
+    public func ocr_detect() async -> [(String, CGRect)]? {
+        guard let cgimg = await take_screenshot() else {
+            return nil
+        }
+
+        if let detector = Self.ocr_detector {
+            return await detector(cgimg)
+        }
+
+        let img = CIImage(cgImage: cgimg)
+
+        do {
+            let requestHandler = VNImageRequestHandler(ciImage: img)
+            let request = VNRecognizeTextRequest()
+            request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"] // Prioritize Chinese, then English
+            try requestHandler.perform([request])
+            let observations = request.results as? [VNRecognizedTextObservation] ?? []
+            return observations.compactMap {
+                guard let candidate = $0.topCandidates(1).first else { return ("", .zero) }
+                let string = candidate.string
+                // Find the bounding-box observation for the string range.
+                let stringRange = candidate.string.startIndex..<candidate.string.endIndex
+                let boxObservation = try? candidate.boundingBox(for: stringRange)
+
+                // Get the normalized CGRect value.
+                let boundingBox = boxObservation?.boundingBox ?? .zero
+
+                // // Convert the rectangle from normalized coordinates to image coordinates.
+                // let rect = VNImageRectForNormalizedRect(boundingBox, cgimg.width, cgimg.height)
+                return (string, boundingBox)
+            }
+        } catch {
+            print("Error during OCR:", error)
+            return nil
+        }
     }
 
     public func sendKey(_ key: Auto.Key, masks: CGEventFlags = []) {
