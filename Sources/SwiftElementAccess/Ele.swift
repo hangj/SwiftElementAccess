@@ -1271,7 +1271,7 @@ extension AXUIElement {
 
         if let cgImage = CGWindowListCreateImage(
             frame,
-            .optionIncludingWindow,
+            [.optionIncludingWindow, .optionOnScreenAboveWindow],
             winId,
             [.boundsIgnoreFraming, .bestResolution]
         )  {
