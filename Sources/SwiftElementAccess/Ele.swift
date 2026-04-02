@@ -429,7 +429,7 @@ extension AXUIElement {
         }
     }
 
-    public func waitUntil(timeout: Int = 10, _ condition: ()-> AXUIElement?) async -> AXUIElement? {
+    public func waitUntil(timeout: Int = 10, _ condition: ()async -> AXUIElement?) async -> AXUIElement? {
         var count = 0
         while true {
             if count >= timeout {
@@ -437,7 +437,7 @@ extension AXUIElement {
             }
             count += 1
 
-            guard let e = condition() else {
+            guard let e = await condition() else {
                 // sleep(1)
                 try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
                 continue
@@ -446,7 +446,7 @@ extension AXUIElement {
         }
     }
 
-    public func waitUntil(timeoutInSeconds: Int=10, _ condition: ()-> Bool) async -> Bool {
+    public func waitUntil(timeoutInSeconds: Int=10, _ condition: ()async-> Bool) async -> Bool {
         var count = 0
         while true {
             if count >= timeoutInSeconds {
@@ -454,7 +454,7 @@ extension AXUIElement {
             }
             count += 1
 
-            guard condition() else {
+            guard await condition() else {
                 // sleep(1)
                 try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
                 continue
