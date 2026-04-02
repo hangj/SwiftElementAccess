@@ -1,7 +1,10 @@
 import Cocoa
 import MyObjCTarget
 import Vision
+
+#if canImport(VisionKit)
 import VisionKit
+#endif
 
 #if canImport(ScreenCaptureKit)
 import ScreenCaptureKit
@@ -1385,7 +1388,7 @@ extension AXUIElement {
             let request = VNRecognizeTextRequest()
             request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"] // Prioritize Chinese, then English
             try requestHandler.perform([request])
-            let observations = request.results as? [VNRecognizedTextObservation] ?? []
+            let observations = request.results ?? [] // as? [VNRecognizedTextObservation] ?? []
             return observations.compactMap {
                 guard let candidate = $0.topCandidates(1).first else { return ("", .zero) }
                 let string = candidate.string
