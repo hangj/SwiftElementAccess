@@ -219,6 +219,10 @@ extension AXUIElement {
         return nil
     }
 
+    public static func focusedApp() -> AXUIElement? {
+        Self.systemRef.valueOfAttr(kAXFocusedApplicationAttribute)
+    }
+
     /// Returns the accessibility object at the specified position in top-left relative screen coordinates
     public static func fromPosition(x: Float, y: Float) -> AXUIElement? {
         var ele: AXUIElement?
@@ -518,13 +522,22 @@ extension AXUIElement {
 
     public var isWindowFrontmost: Bool {
         get {
+            return isMainWindow
+        }
+        set(v) {
+            isMainWindow = v
+        }
+    }
+
+    public var isMainWindow: Bool {
+        get {
             if self.isWindowUIElement {
                 if let b: Bool = self.valueOfAttr(kAXMainAttribute) {
                     return b
                 }
                 return false
             } else {
-                return self.window?.isWindowFrontmost ?? false
+                return self.window?.isMainWindow ?? false
             }
         }
         set(v) {
@@ -534,7 +547,30 @@ extension AXUIElement {
                 }
                 let _ = setAttr(kAXMainAttribute, value: v)
             } else {
-                self.window?.isWindowFrontmost = v
+                self.window?.isMainWindow = v
+            }
+        }
+    }
+
+    public var isFocusedWindow: Bool {
+        get {
+            if self.isWindowUIElement {
+                if let b: Bool = self.valueOfAttr(kAXFocusedAttribute) {
+                    return b
+                }
+                return false
+            } else {
+                return self.window?.isFocusedWindow ?? false
+            }
+        }
+        set(v) {
+            if self.isWindowUIElement {
+                if isMinimized {
+                    isMinimized = false
+                }
+                let _ = setAttr(kAXFocusedAttribute, value: v)
+            } else {
+                self.window?.isFocusedWindow = v
             }
         }
     }
@@ -869,10 +905,15 @@ extension AXUIElement {
     }
 
     public var isFocused: Bool {
-        if let focused: Bool = self.valueOfAttr(kAXFocusedAttribute) {
-            return focused
+        get {
+            if let focused: Bool = self.valueOfAttr(kAXFocusedAttribute) {
+                return focused
+            }
+            return false
         }
-        return false
+        set(v) {
+            let _ = setAttr(kAXFocusedAttribute, value: v)
+        }
     }
 
     /// top-left corner of the element, display coordinate(origin at upper-left corner)
@@ -1050,7 +1091,14 @@ extension AXUIElement {
         if err == .success, let v = value, CFGetTypeID(v) == AXUIElementGetTypeID() {
             return (v as! AXUIElement)
         }
-        return nil
+        // return nil
+        // for win in self.appUIElement.windows {
+        //     print("win:", win.title, "isMainWindow:", win.isMainWindow)
+        //     if win.isMainWindow {
+        //         return win
+        //     }
+        // }
+        return self.appUIElement.windows.first(where: { $0.isMainWindow })
     }
 
     public var focusedWindow: AXUIElement? {
@@ -1059,7 +1107,8 @@ extension AXUIElement {
         if err == .success, let v = value, CFGetTypeID(v) == AXUIElementGetTypeID() {
             return (v as! AXUIElement)
         }
-        return nil
+        // return nil
+        return self.appUIElement.windows.first(where: { $0.isFocused })
     }
 
     public var focusElements: [AXUIElement] {
@@ -1253,7 +1302,7 @@ extension AXUIElement {
     }
 
     /// return the screenshot of current AXUIElement
-    public func take_screenshot() async -> CGImage? {
+    public func take_screenshot(listOption: CGWindowListOption = [.optionIncludingWindow]) async -> CGImage? {
         guard let win = self.window else {
             print("window attr not found")
             return nil
@@ -1274,7 +1323,7 @@ extension AXUIElement {
 
         if let cgImage = CGWindowListCreateImage(
             frame,
-            [.optionIncludingWindow, .optionOnScreenAboveWindow],
+            listOption, // [.optionIncludingWindow, .optionOnScreenAboveWindow]
             winId,
             [.boundsIgnoreFraming, .bestResolution]
         )  {
@@ -1296,6 +1345,7 @@ extension AXUIElement {
                 return img
             }
         }
+        print("CGSHWCaptureWindowList failed.")
 
         #if canImport(ScreenCaptureKit)
         if #available(macOS 14.0, *) {
@@ -1330,8 +1380,8 @@ extension AXUIElement {
     }
 
     /// save the screenshot of current AXUIElement, and return it
-    public func take_screenshot(path: String) async -> CGImage? {
-        guard let cgImage = await take_screenshot() else { return nil }
+    public func take_screenshot(path: String, listOption: CGWindowListOption = [.optionIncludingWindow]) async -> CGImage? {
+        guard let cgImage = await take_screenshot(listOption: listOption) else { return nil }
 
         do {
             let img = CIImage(cgImage: cgImage)
@@ -1349,7 +1399,7 @@ extension AXUIElement {
         // ).waitUntilExit()
     }
 
-    public func scan_qrcodes() async -> [String]? {
+    public func scan_qrcodes(listOption: CGWindowListOption = [.optionIncludingWindow]) async -> [String]? {
         guard let detector = CIDetector(
             ofType: CIDetectorTypeQRCode,
             context: nil,
@@ -1359,7 +1409,7 @@ extension AXUIElement {
             return nil
         }
 
-        guard let cgimg = await take_screenshot() else {
+        guard let cgimg = await take_screenshot(listOption: listOption) else {
             return nil
         }
 
@@ -1372,8 +1422,8 @@ extension AXUIElement {
     }
 
     /// https://developer.apple.com/documentation/vision/recognizing-text-in-images
-    public func ocr_detect() async -> [(String, CGRect)]? {
-        guard let cgimg = await take_screenshot() else {
+    public func ocr_detect(listOption: CGWindowListOption = [.optionIncludingWindow]) async -> [(String, CGRect)]? {
+        guard let cgimg = await take_screenshot(listOption: listOption) else {
             return nil
         }
 
