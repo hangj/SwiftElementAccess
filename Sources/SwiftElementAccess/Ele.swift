@@ -154,7 +154,7 @@ extension AXUIElement {
     static var observers: [pid_t: AXObserver] = [:]
     static var notificationCallbacks: [AXUIElement: Callback] = [:]
     static var notifications: [AXUIElement: [String]] = [:]
-    public static var ocr_detector: ((CGImage) async -> [(String, CGRect)]?)?
+    // public static var ocr_detector: ((CGImage) async -> [(String, CGRect)]?)?
 
     /// https://stackoverflow.com/a/50901425/1936057
     /// It appears, in 10.13.3 at least, that applications which are using the app sandbox will not have the alert shown. If you turn off app sandbox in the project entitlements then the alert is shown
@@ -1422,12 +1422,12 @@ extension AXUIElement {
     }
 
     /// https://developer.apple.com/documentation/vision/recognizing-text-in-images
-    public func ocr_detect(listOption: CGWindowListOption = [.optionIncludingWindow]) async -> [(String, CGRect)]? {
+    public func ocr_detect(listOption: CGWindowListOption = [.optionIncludingWindow], detector: ((CGImage) async -> [(String, CGRect)]?)? = nil) async -> [(String, CGRect)]? {
         guard let cgimg = await take_screenshot(listOption: listOption) else {
             return nil
         }
 
-        if let detector = Self.ocr_detector {
+        if let detector = detector {
             return await detector(cgimg)
         }
 
@@ -1449,9 +1449,12 @@ extension AXUIElement {
                 // Get the normalized CGRect value.
                 let boundingBox = boxObservation?.boundingBox ?? .zero
 
-                // // Convert the rectangle from normalized coordinates to image coordinates.
-                // let rect = VNImageRectForNormalizedRect(boundingBox, cgimg.width, cgimg.height)
-                return (string, boundingBox)
+                // Convert the rectangle from normalized coordinates to image coordinates.
+                var rect = VNImageRectForNormalizedRect(boundingBox, cgimg.width, cgimg.height)
+
+                // change the origin to the image's upper-left corner
+                rect.origin.y = CGFloat(cgimg.height) - rect.origin.y - rect.size.height // Flip the y-coordinate
+                return (string, rect)
             }
         } catch {
             print("Error during OCR:", error)
