@@ -10,6 +10,92 @@ import VisionKit
 import ScreenCaptureKit
 #endif
 
+// #if swift(>=6.0)
+#if canImport(VisionKit)
+extension String: @retroactive Error {}
+extension String: @retroactive LocalizedError {
+    public var errorDescription: String? { return self }
+}
+
+extension AXError: @retroactive _BridgedNSError {}
+extension AXError: @retroactive _ObjectiveCBridgeableError {}
+extension AXError: @retroactive Error, @retroactive LocalizedError, @retroactive CustomStringConvertible {
+    public var errorDescription: String? { return description }
+    public var description: String {
+        switch self {
+            case .success: return "success"
+            case .failure: return "failure"
+            case .illegalArgument: return "illegal argument"
+            case .invalidUIElement: return "invalid UI element"
+            case .invalidUIElementObserver: return "invalid UI element observer"
+            case .cannotComplete: return "cannot complete"
+            case .attributeUnsupported: return "attribute unsupported"
+            case .actionUnsupported: return "action unsupported"
+            case .notificationUnsupported: return "notification unsupported"
+            case .notImplemented: return "not implemented"
+            case .notificationAlreadyRegistered: return "notification already registered"
+            case .notificationNotRegistered: return "notification not registered"
+            case .apiDisabled: return "API disabled for application"
+            case .noValue: return "no value"
+            case .parameterizedAttributeUnsupported: return "parameterized attribute unsupported"
+            case .notEnoughPrecision: return "not enough precision"
+            @unknown default:
+                return "unknown error \(self.rawValue)"
+        }
+    }
+}
+
+extension FileHandle: @retroactive TextOutputStream {
+    public func write(_ string: String) {
+        self.write(Data(string.utf8))
+    }
+}
+#else
+extension String: Error {}
+extension String: LocalizedError {
+    public var errorDescription: String? { return self }
+}
+
+extension AXError: Error, LocalizedError, CustomStringConvertible {
+    public var errorDescription: String? { return description }
+    public var description: String {
+        switch self {
+            case .success: return "success"
+            case .failure: return "failure"
+            case .illegalArgument: return "illegal argument"
+            case .invalidUIElement: return "invalid UI element"
+            case .invalidUIElementObserver: return "invalid UI element observer"
+            case .cannotComplete: return "cannot complete"
+            case .attributeUnsupported: return "attribute unsupported"
+            case .actionUnsupported: return "action unsupported"
+            case .notificationUnsupported: return "notification unsupported"
+            case .notImplemented: return "not implemented"
+            case .notificationAlreadyRegistered: return "notification already registered"
+            case .notificationNotRegistered: return "notification not registered"
+            case .apiDisabled: return "API disabled for application"
+            case .noValue: return "no value"
+            case .parameterizedAttributeUnsupported: return "parameterized attribute unsupported"
+            case .notEnoughPrecision: return "not enough precision"
+            @unknown default:
+                return "unknown error \(self.rawValue)"
+        }
+    }
+}
+
+extension FileHandle: TextOutputStream {
+    public func write(_ string: String) {
+        self.write(Data(string.utf8))
+    }
+}
+#endif
+
+
+
+func eprint(_ items: Any..., separator: String = " ", terminator: String = "\n") {
+    var stdErr = FileHandle.standardError
+    print(items, separator: separator, terminator: terminator, to: &stdErr)
+}
+
 
 private func stringFromAttrValue(_ value: AnyObject) -> String {
     if value is String {
@@ -154,14 +240,13 @@ extension AXUIElement {
     static var observers: [pid_t: AXObserver] = [:]
     static var notificationCallbacks: [AXUIElement: Callback] = [:]
     static var notifications: [AXUIElement: [String]] = [:]
-    // public static var ocr_detector: ((CGImage) async -> [(String, CGRect)]?)?
 
     /// https://stackoverflow.com/a/50901425/1936057
     /// It appears, in 10.13.3 at least, that applications which are using the app sandbox will not have the alert shown. If you turn off app sandbox in the project entitlements then the alert is shown
     public static func checkIsProcessTrusted(prompt: Bool = true) -> Bool {
         if ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil {
-            print("sandbox is enabled.")
-            // print("This app is not trusted to use Accessibility API. Please enable it in System Preferences > Security & Privacy > Privacy > Accessibility")
+            eprint("sandbox is enabled.")
+            eprint("This app is not trusted to use Accessibility API. Please enable it in System Preferences > Security & Privacy > Privacy > Accessibility")
             return false
         }
         let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
@@ -181,7 +266,10 @@ extension AXUIElement {
     public static func fromPid(_ pid: pid_t) -> AXUIElement {
         let kAXManualAccessibility = "AXManualAccessibility" as CFString;
         let e = AXUIElementCreateApplication(pid)
-        AXUIElementSetAttributeValue(e, kAXManualAccessibility, kCFBooleanTrue)
+        let err = AXUIElementSetAttributeValue(e, kAXManualAccessibility, kCFBooleanTrue)
+        if err != .success {
+            eprint("fromPid(\(pid)) - AXUIElementSetAttributeValue AXManualAccessibility error:", err)
+        }
         return e
     }
 
@@ -189,32 +277,23 @@ extension AXUIElement {
     /// AXUIElement.fromProcessName("WeChat")
     /// ```
     public static func fromProcessName(_ name: String) -> [AXUIElement] {
-        var ret: [AXUIElement] = []
-
-        NSWorkspace.shared.runningApplications.filter {
+        return NSWorkspace.shared.runningApplications.filter {
             $0.localizedName == name
-        }.forEach {
-            ret.append(AXUIElement.fromPid($0.processIdentifier))
+        }.map {
+            Self.fromPid($0.processIdentifier)
         }
-
-        return ret
     }
 
     /// ```
     /// AXUIElement.fromBundleIdentifier("com.tencent.xinWeChat")
     /// ```
     public static func fromBundleIdentifier(_ bundleIdentifier: String) -> [AXUIElement] {
-        var ret: [AXUIElement] = []
-        NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).forEach {
-            ret.append(AXUIElement.fromPid($0.processIdentifier))
-        }
-
-        return ret
+        return NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).map { Self.fromPid($0.processIdentifier) }
     }
 
     public static func fromFrontMostApplication() -> AXUIElement? {
         if let app = NSWorkspace.shared.frontmostApplication {
-            return AXUIElement.fromPid(app.processIdentifier)
+            return Self.fromPid(app.processIdentifier)
         }
         return nil
     }
@@ -224,22 +303,22 @@ extension AXUIElement {
     }
 
     /// Returns the accessibility object at the specified position in top-left relative screen coordinates
-    public static func fromPosition(x: Float, y: Float) -> AXUIElement? {
+    public static func fromPosition(x: Float, y: Float) -> Result<AXUIElement, String> {
         var ele: AXUIElement?
         let err = AXUIElementCopyElementAtPosition(AXUIElement.systemRef, x, y, &ele)
         if err == .success {
-            return ele!
+            return .success(ele!)
         }
-        print("AXUIElementCopyElementAtPosition error:", err)
-        return nil
+        eprint("AXUIElementCopyElementAtPosition error:", err)
+        return .failure("Failed to get element at position (\(x), \(y)): \(err)")
     }
 
     /// Returns the accessibility object at the specified position in top-left relative screen coordinates
-    public static func fromPosition(_ pos: NSPoint) -> AXUIElement? {
+    public static func fromPosition(_ pos: NSPoint) -> Result<AXUIElement, String> {
         return fromPosition(x: Float(pos.x), y: Float(pos.y))
     }
 
-    public static func fromMouseLocation() -> AXUIElement? {
+    public static func fromMouseLocation() -> Result<AXUIElement, String> {
         var point = NSEvent.mouseLocation
         point.y = NSScreen.screens[0].frame.height - point.y
         return Self.fromPosition(point)
@@ -1176,8 +1255,14 @@ extension AXUIElement {
         }
 
         let position = NSPoint(x: frame.midX, y: frame.midY)
-        guard let ele = AXUIElement.fromPosition(position), ele.pid == self.pid, ele.windowId == self.windowId else {
-            print("There is other app showing overlay the current app")
+        let r = AXUIElement.fromPosition(position)
+        if case .failure(let err) = r {
+            eprint("AXUIElement.fromPosition error:", err)
+            return
+        }
+
+        guard let ele = try? r.get(), ele.pid == self.pid, ele.windowId == self.windowId else {
+            eprint("There is other app showing overlay the current app")
             return
         }
 
