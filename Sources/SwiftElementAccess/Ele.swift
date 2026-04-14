@@ -546,6 +546,12 @@ extension AXUIElement {
         }
     }
 
+    public var invalidUIElement: Bool {
+        var value: AnyObject?
+        let e = AXUIElementCopyAttributeValue(self, kAXRoleAttribute as CFString, &value)
+        return e == .invalidUIElement
+    }
+
     public var isAppTerminated: Bool {
         let pid = self.pid
         if pid < 0 {
