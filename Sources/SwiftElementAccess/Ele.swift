@@ -93,7 +93,15 @@ extension FileHandle: TextOutputStream {
 
 func eprint(_ items: Any..., separator: String = " ", terminator: String = "\n") {
     var stdErr = FileHandle.standardError
-    print(items, separator: separator, terminator: terminator, to: &stdErr)
+    /// can't forward variadic arguments
+    /// https://github.com/swiftlang/swift/issues/42750
+    // print(items, separator: separator, terminator: terminator, to: &stdErr)
+
+    print("ERROR: ", separator: separator, terminator: "", to: &stdErr)
+    for item in items {
+        print(item, separator: separator, terminator: "", to: &stdErr)
+    }
+    print("", terminator: terminator, to: &stdErr)
 }
 
 
@@ -339,7 +347,7 @@ extension AXUIElement {
             Self.observers[pid] = obs
             return obs
         }
-        print("AXObserverCreate error:", e.rawValue)
+        eprint("AXObserverCreate error:", e)
         return nil
     }
 
@@ -597,7 +605,7 @@ extension AXUIElement {
                 if setAttr(kAXFrontmostAttribute, value: v) {
                     print("setAppFrontmost success")
                 } else {
-                    print("setAppFrontmost failed")
+                    eprint("setAppFrontmost failed")
                 }
             } else {
                 self.appUIElement.isAppFrontmost = v
@@ -703,10 +711,11 @@ extension AXUIElement {
 
     public var pid: pid_t {
         var pid: pid_t = 0
-        if AXUIElementGetPid(self, &pid) == .success {
+        let e = AXUIElementGetPid(self, &pid)
+        if e == .success {
             return pid
         }
-        print("AXUIElementGetPid error")
+        eprint("AXUIElementGetPid error: ", e)
         return -1
     }
 
@@ -729,12 +738,12 @@ extension AXUIElement {
         /// https://stackoverflow.com/questions/75163201/how-can-i-get-the-dock-badge-text-of-other-applications
 
         guard let CoreServiceBundle = CFBundleGetBundleWithIdentifier("com.apple.CoreServices" as CFString) else {
-            print("CoreServiceBundle not found")
+            eprint("CoreServiceBundle not found")
             return nil
         }
 
         guard let functionPtr_LSCopyRunningApplicationArray = CFBundleGetFunctionPointerForName(CoreServiceBundle, "_LSCopyRunningApplicationArray" as CFString) else {
-            print("_LSCopyRunningApplicationArray not found")
+            eprint("_LSCopyRunningApplicationArray not found")
             return nil
         }
 
@@ -743,7 +752,7 @@ extension AXUIElement {
         }
 
         guard let functionPtr_LSCopyApplicationInformation = CFBundleGetFunctionPointerForName(CoreServiceBundle, "_LSCopyApplicationInformation" as CFString) else {
-            print("_LSCopyApplicationInformation not found")
+            eprint("_LSCopyApplicationInformation not found")
             return nil
         }
         let GetApplicationInformation: (CFTypeRef) -> [String:CFTypeRef] = { app in
@@ -751,7 +760,7 @@ extension AXUIElement {
         }
 
         guard let functionPtr_LSASNExtractHighAndLowParts = CFBundleGetFunctionPointerForName(CoreServiceBundle, "_LSASNExtractHighAndLowParts" as CFString) else {
-            print("_LSASNExtractHighAndLowParts not found")
+            eprint("_LSASNExtractHighAndLowParts not found")
             return nil
         }
         let LSASNExtractHighAndLowParts = { (asn: CFTypeRef, high: UnsafeMutablePointer<UInt32>, low: UnsafeMutablePointer<UInt32>) -> Void in
@@ -765,11 +774,11 @@ extension AXUIElement {
 
         let appInfos = GetRunningApplicationArray().map { GetApplicationInformation($0) }
         guard let info = appInfos.first(where: { $0["pid"] as? pid_t == pid }) else {
-            print("App with pid \(pid) not found")
+            eprint("App with pid \(pid) not found")
             return nil
         }
         guard let lsasn = info["LSASN"] else {
-            print("LSASN not found")
+            eprint("LSASN not found")
             return nil
         }
 
@@ -779,13 +788,13 @@ extension AXUIElement {
 
     public func sendReopenEvent() -> Bool {
         guard var psn = self.psn else {
-            print("psn not found")
+            eprint("psn not found")
             return false
         }
 
         var target = AEDesc()
         if noErr != AECreateDesc( typeProcessSerialNumber, &psn, MemoryLayout.size(ofValue: psn), &target) {
-            print("AECreateDesc error")
+            eprint("AECreateDesc error")
             return false
         }
 
@@ -797,14 +806,14 @@ extension AXUIElement {
                 Int32(kAnyTransactionID),
                 &event)
         if e != noErr {
-            print("AECreateAppleEvent error:", e)
+            eprint("AECreateAppleEvent error:", e)
             return false
         }
 
         var reply = AppleEvent()
         let r = AESendMessage(&event, &reply, AESendMode(kAEWaitReply), kAEDefaultTimeout)
         if r != noErr {
-            print("AESendMessage error:", r)
+            eprint("AESendMessage error:", r)
             return false
         }
 
@@ -834,6 +843,7 @@ extension AXUIElement {
         if axError == .success {
             return value as? T
         }
+        eprint("valueOfAttr get \(attr) failed:", axError)
         return nil
     }
 
@@ -842,7 +852,7 @@ extension AXUIElement {
 
         let e = AXUIElementSetAttributeValue(self, attr as CFString, value as CFTypeRef)
         if e != .success {
-            print("set \(attr) \(value) failed:", e.rawValue)
+            eprint("set \(attr) \(value) failed:", e)
             return false
         }
         return true
@@ -1014,7 +1024,7 @@ extension AXUIElement {
         }
         set(pos){
             guard var pos = pos else { return }
-            let ref = AXValueCreate(.cgPoint, &pos)
+            let ref = AXValueCreate(.cgPoint, &pos)!
             let _ = setAttr(kAXPositionAttribute, value: ref)
         }
     }   
@@ -1032,25 +1042,37 @@ extension AXUIElement {
         }
         set(sz) {
             guard var sz = sz else { return }
-            let ref = AXValueCreate(.cgSize, &sz)
+            let ref = AXValueCreate(.cgSize, &sz)!
             let _ = setAttr(kAXSizeAttribute, value: ref)
         }
     }
 
     /// display coordinate(origin at upper-left corner)
     public var frame: CGRect? {
-        if let v: AXValue = self.valueOfAttr("AXFrame") {
-            var rect = CGRect()
-            AXValueGetValue(v, AXValueGetType(v), &rect)
-            return rect
-        } else {
-            if let pos = self.position {
-                if let size = self.size {
-                    return CGRect(origin: pos, size: size)
+        get {
+            if let v: AXValue = self.valueOfAttr("AXFrame") {
+                var rect = CGRect()
+                AXValueGetValue(v, AXValueGetType(v), &rect)
+                return rect
+            } else {
+                if let pos = self.position {
+                    if let size = self.size {
+                        return CGRect(origin: pos, size: size)
+                    }
                 }
             }
+            return nil
         }
-        return nil
+        set {
+            guard var rect = newValue else { return }
+            if let _: AXValue = self.valueOfAttr("AXFrame") {
+                let ref = AXValueCreate(.cgRect, &rect)!
+                let _ = setAttr("AXFrame", value: ref)
+            } else {
+                self.position = rect.origin
+                self.size = rect.size
+            }
+        }
     }
 
     public var parent: AXUIElement?{
@@ -1247,7 +1269,7 @@ extension AXUIElement {
 
     public func mouseLeftClick() {
         guard let frame = self.frame else {
-            print("AXUIElement has no frame")
+            eprint("AXUIElement has no frame")
             return
         }
 
@@ -1358,13 +1380,13 @@ extension AXUIElement {
         if result == .success { return winId }
 
         guard let win_frame = self.window?.frame else {
-            print("Window frame is nil")
+            eprint("Window frame is nil")
             return nil
         }
 
         // https://stackoverflow.com/questions/30336740/how-to-get-window-list-from-core-grapics-api-with-swift
         guard let info = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as? [[ String : Any]] else {
-            print("CGWindowListCopyWindowInfo failed.")
+            eprint("CGWindowListCopyWindowInfo failed.")
             return nil
         }
         if let winId = info.first(where: { dict in
@@ -1395,20 +1417,20 @@ extension AXUIElement {
     /// return the screenshot of current AXUIElement
     public func take_screenshot(listOption: CGWindowListOption = [.optionIncludingWindow]) async -> CGImage? {
         guard let win = self.window else {
-            print("window attr not found")
+            eprint("window attr not found")
             return nil
         }
         guard let win_frame = win.frame else {
-            print("win_frame is nil")
+            eprint("win_frame is nil")
             return nil
         }
         guard let frame = self.frame else {
-            print("Element frame is nil")
+            eprint("Element frame is nil")
             return nil
         }
 
         guard let winId = windowId else {
-            print("windowId not found!")
+            eprint("windowId not found!")
             return nil
         }
 
@@ -1421,7 +1443,7 @@ extension AXUIElement {
             return cgImage
         }
 
-        print("CGWindowListCreateImage failed. If you call this function from outside of a GUI security session or when no window server is running, this function returns NULL")
+        eprint("CGWindowListCreateImage failed. If you call this function from outside of a GUI security session or when no window server is running, this function returns NULL")
 
         // we use CGSHWCaptureWindowList because it can screenshot minimized windows, which CGWindowListCreateImage can't
         var windowId_ = winId
@@ -1436,7 +1458,7 @@ extension AXUIElement {
                 return img
             }
         }
-        print("CGSHWCaptureWindowList failed.")
+        eprint("CGSHWCaptureWindowList failed.")
 
         #if canImport(ScreenCaptureKit)
         if #available(macOS 14.0, *) {
@@ -1446,7 +1468,7 @@ extension AXUIElement {
                 // let display = content!.displays.first(where: { $0.displayID == mainDisplayID }) else { return nil }
                 // let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
                 guard let win = content.windows.first(where: { $0.windowID == winId }) else {
-                    print("window not found")
+                    eprint("window not found")
                     return nil
                 }
                 let filter = SCContentFilter(desktopIndependentWindow: win)
@@ -1462,7 +1484,7 @@ extension AXUIElement {
                 cfg.showsCursor = false
                 return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg)
             } catch {
-                print("error:", error)
+                eprint("error:", error)
             }
         }
         #endif
@@ -1478,7 +1500,7 @@ extension AXUIElement {
             let img = CIImage(cgImage: cgImage)
             try CIContext(options: nil).writePNGRepresentation(of: img, to: URL(fileURLWithPath: path), format: .RGBA8, colorSpace: img.colorSpace!, options: [:])
         } catch {
-            print("error:", error)
+            eprint("take_screenshot error:", error)
         }
         return cgImage
 
@@ -1496,7 +1518,7 @@ extension AXUIElement {
             context: nil,
             options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]
         ) else {
-            print("Detector not intialized")
+            eprint("Detector not intialized")
             return nil
         }
 
@@ -1548,7 +1570,7 @@ extension AXUIElement {
                 return (string, rect)
             }
         } catch {
-            print("Error during OCR:", error)
+            eprint("Error during OCR:", error)
             return nil
         }
     }
@@ -1556,7 +1578,7 @@ extension AXUIElement {
     public func sendKey(_ key: Auto.Key, masks: CGEventFlags = []) {
         let pid = pid
         if pid < 0 {
-            print("Invalid pid")
+            eprint("Invalid pid")
             return
         }
         key.click(masks: masks, toPid: pid)
