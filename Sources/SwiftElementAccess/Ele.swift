@@ -97,11 +97,11 @@ func eprint(_ items: Any..., separator: String = " ", terminator: String = "\n")
     /// https://github.com/swiftlang/swift/issues/42750
     // print(items, separator: separator, terminator: terminator, to: &stdErr)
 
-    print("ERROR: ", separator: separator, terminator: "", to: &stdErr)
-    for item in items {
-        print(item, separator: separator, terminator: "", to: &stdErr)
+    print("ERROR:", separator, separator: "", terminator: "", to: &stdErr)
+    for (i, item) in items.enumerated() {
+        print(item, i == items.endIndex - 1 ? "" : separator, separator: "", terminator: "", to: &stdErr)
     }
-    print("", terminator: terminator, to: &stdErr)
+    print("", separator: separator, terminator: terminator, to: &stdErr)
 }
 
 
@@ -793,27 +793,28 @@ extension AXUIElement {
         }
 
         var target = AEDesc()
-        if noErr != AECreateDesc( typeProcessSerialNumber, &psn, MemoryLayout.size(ofValue: psn), &target) {
-            eprint("AECreateDesc error")
+        var e = AECreateDesc( typeProcessSerialNumber, &psn, MemoryLayout.size(ofValue: psn), &target)
+        if noErr != e {
+            eprint("AECreateDesc error: \(e)")
             return false
         }
 
         var event = AppleEvent()
-        let e = AECreateAppleEvent ( kCoreEventClass,
+        e = AECreateAppleEvent ( kCoreEventClass,
                 kAEReopenApplication,
                 &target,
                 Int16(kAutoGenerateReturnID),
                 Int32(kAnyTransactionID),
                 &event)
         if e != noErr {
-            eprint("AECreateAppleEvent error:", e)
+            eprint("AECreateAppleEvent error: \(e)")
             return false
         }
 
         var reply = AppleEvent()
         let r = AESendMessage(&event, &reply, AESendMode(kAEWaitReply), kAEDefaultTimeout)
         if r != noErr {
-            eprint("AESendMessage error:", r)
+            eprint("AESendMessage error: \(r)")
             return false
         }
 
@@ -1378,6 +1379,7 @@ extension AXUIElement {
         var winId = CGWindowID(0)
         let result = _AXUIElementGetWindow(win, &winId)
         if result == .success { return winId }
+        eprint("_AXUIElementGetWindow failed with error: \(result).")
 
         guard let win_frame = self.window?.frame else {
             eprint("Window frame is nil")
@@ -1410,6 +1412,7 @@ extension AXUIElement {
         })?[kCGWindowNumber as String] as? UInt32 {
             return winId
         }
+        eprint("windowId not found by CGWindowListCopyWindowInfo")
 
         return nil
     }
@@ -1576,9 +1579,9 @@ extension AXUIElement {
     }
 
     public func sendKey(_ key: Auto.Key, masks: CGEventFlags = []) {
-        let pid = pid
+        let pid = self.pid
         if pid < 0 {
-            eprint("Invalid pid")
+            eprint("Invalid pid: \(pid)")
             return
         }
         key.click(masks: masks, toPid: pid)
