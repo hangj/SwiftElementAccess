@@ -89,19 +89,75 @@ extension FileHandle: TextOutputStream {
 }
 #endif
 
+/// Source - https://stackoverflow.com/a/72136770
+/// Posted by clearlight, modified by community. See post 'Timeline' for change history
+/// Retrieved 2026-04-17, License - CC BY-SA 4.0
+/// https://stackoverflow.com/a/72136770/1936057
+func whence(_ lineNumber: Int = #line) {
+    func matchRegex(_ matcher: String,  string : String) -> String? {
+        let regex = try! NSRegularExpression(pattern: matcher, options: [])
+        let range = NSRange(string.startIndex ..< string.endIndex, in: string)
+        guard let textCheckingResult = regex.firstMatch(in: string, options: [], range: range) else {
+            return nil
+        }
+        return (string as NSString).substring(with:textCheckingResult.range(at:1)) as String
+    }
+
+    func singleMatchRegex(_ matcher: String,  string : String) -> String? {
+        let regex = try! NSRegularExpression(pattern: matcher, options: [])
+        let range = NSRange(string.startIndex ..< string.endIndex, in: string)
+        let matchRange = regex.rangeOfFirstMatch(in: string, range: range)
+        if matchRange == NSMakeRange(NSNotFound, 0) {
+            return nil
+        }
+        return (string as NSString).substring(with: matchRange) as String
+    }
+
+    var string = Thread.callStackSymbols[1]
+    string = String(string.suffix(from:string.firstIndex(of: "$")!))
+                    
+    let appNameLenString = matchRegex(#"\$s(\d*)"#, string: string)!
+    let appNameLen = Int(appNameLenString)!
+
+    string = String(string.dropFirst(appNameLenString.count + 2))
+    
+    let appName = singleMatchRegex(".{\(appNameLen)}", string: string)!
+    
+    string = String(string.dropFirst(appNameLen))
+    
+    let classNameLenString = singleMatchRegex(#"\d*"#, string: string)!
+    let classNameLen = Int(classNameLenString)!
+
+    string = String(string.dropFirst(classNameLenString.count))
+    
+    let className = singleMatchRegex(".{\(classNameLen)}", string: string)!
+
+    string = String(string.dropFirst(classNameLen))
+    
+    let methodNameLenString = matchRegex(#".(\d*)"#, string: string)!
+    let methodNameLen = Int(methodNameLenString)!
+
+    string = String(string.dropFirst(methodNameLenString.count + 1))
+    
+    let methodName = singleMatchRegex(".{\(methodNameLen)}", string: string)!
+    
+    let _ = appName
+    print("\(className).\(methodName)():\(lineNumber)")
+}
 
 
-func eprint(_ items: Any..., separator: String = " ", terminator: String = "\n") {
+func eprint(_ items: Any..., separator: String = " ", terminator: String = "\n", file: String = #file, line: UInt = #line) {
     var stdErr = FileHandle.standardError
     /// can't forward variadic arguments
     /// https://github.com/swiftlang/swift/issues/42750
     // print(items, separator: separator, terminator: terminator, to: &stdErr)
 
-    print("ERROR:", separator, separator: "", terminator: "", to: &stdErr)
+    print("ERROR - \(file):\(line) -", separator, separator: "", terminator: "", to: &stdErr)
     for (i, item) in items.enumerated() {
         print(item, i == items.endIndex - 1 ? "" : separator, separator: "", terminator: "", to: &stdErr)
     }
     print("", separator: separator, terminator: terminator, to: &stdErr)
+    print("Thread.callStackSymbols:\n", Thread.callStackSymbols.joined(separator: "\n"), separator: "", to: &stdErr)
 }
 
 
