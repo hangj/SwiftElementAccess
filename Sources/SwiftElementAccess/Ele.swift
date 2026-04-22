@@ -558,6 +558,11 @@ extension AXUIElement {
     public var invalidUIElement: Bool {
         var value: AnyObject?
         let e = AXUIElementCopyAttributeValue(self, kAXRoleAttribute as CFString, &value)
+        if e == .success {
+            return false
+        }
+
+        eprint("invalidUIElement - AXUIElementCopyAttributeValue error:", e)
         return e == .invalidUIElement
     }
 
