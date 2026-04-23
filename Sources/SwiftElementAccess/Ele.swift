@@ -563,7 +563,8 @@ extension AXUIElement {
         }
 
         eprint("invalidUIElement - AXUIElementCopyAttributeValue error:", e)
-        return e == .invalidUIElement
+        return true
+        // return e == .invalidUIElement
     }
 
     public var isAppTerminated: Bool {
