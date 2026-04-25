@@ -101,8 +101,8 @@ func eprint(_ items: Any..., separator: String = " ", terminator: String = "\n",
         print(item, i == items.endIndex - 1 ? "" : separator, separator: "", terminator: "", to: &stdErr)
     }
     print("", separator: separator, terminator: terminator, to: &stdErr)
-    let symbols = Thread.callStackSymbols.dropFirst().joined(separator: "\n")
-    print("Thread.callStackSymbols:\n", symbols, separator: "", to: &stdErr)
+    // let symbols = Thread.callStackSymbols.dropFirst().joined(separator: "\n")
+    // print("Thread.callStackSymbols:\n", symbols, separator: "", to: &stdErr)
 }
 
 
@@ -562,9 +562,7 @@ extension AXUIElement {
             return false
         }
 
-        eprint("invalidUIElement - AXUIElementCopyAttributeValue error:", e)
         return true
-        // return e == .invalidUIElement
     }
 
     public var isAppTerminated: Bool {
@@ -851,7 +849,7 @@ extension AXUIElement {
         if axError == .success {
             return value as? T
         }
-        eprint("valueOfAttr get \(attr) failed:", axError)
+        // eprint("valueOfAttr get \(attr) failed:", axError)
         return nil
     }
 
