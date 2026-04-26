@@ -90,17 +90,19 @@ extension FileHandle: TextOutputStream {
 #endif
 
 
-func eprint(_ items: Any..., separator: String = " ", terminator: String = "\n", file: String = #file, line: UInt = #line) {
+func eprint(_ items: Any..., separator: String = " ", terminator: String = "\n", file: String = #file, line: UInt = #line, function: String = #function) {
     var stdErr = FileHandle.standardError
     /// can't forward variadic arguments
     /// https://github.com/swiftlang/swift/issues/42750
     // print(items, separator: separator, terminator: terminator, to: &stdErr)
 
-    print("ERROR - \(file):\(line) -", separator, separator: "", terminator: "", to: &stdErr)
-    for (i, item) in items.enumerated() {
-        print(item, i == items.endIndex - 1 ? "" : separator, separator: "", terminator: "", to: &stdErr)
-    }
-    print("", separator: separator, terminator: terminator, to: &stdErr)
+
+    let fmt = DateFormatter()
+    fmt.dateFormat = "yyyy-MM-dd HH:mm:ss"
+    let time = fmt.string(from: Date())
+
+    print("\(time) ERROR \(file):\(line):\(function) - ", items.map{ "\($0)" }.joined(separator: separator), separator: "", terminator: terminator, to: &stdErr)
+
     // let symbols = Thread.callStackSymbols.dropFirst().joined(separator: "\n")
     // print("Thread.callStackSymbols:\n", symbols, separator: "", to: &stdErr)
 }
