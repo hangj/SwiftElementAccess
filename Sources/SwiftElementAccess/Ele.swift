@@ -1574,6 +1574,7 @@ extension AXUIElement {
         let img = CIImage(cgImage: cgimg)
 
         do {
+            let scale = Int(NSScreen.screens[0].backingScaleFactor)
             let requestHandler = VNImageRequestHandler(ciImage: img)
             let request = VNRecognizeTextRequest()
             request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"] // Prioritize Chinese, then English
@@ -1590,10 +1591,10 @@ extension AXUIElement {
                 let boundingBox = boxObservation?.boundingBox ?? .zero
 
                 // Convert the rectangle from normalized coordinates to image coordinates.
-                var rect = VNImageRectForNormalizedRect(boundingBox, cgimg.width, cgimg.height)
+                var rect = VNImageRectForNormalizedRect(boundingBox, cgimg.width / scale, cgimg.height / scale)
 
                 // change the origin to the image's upper-left corner
-                rect.origin.y = CGFloat(cgimg.height) - rect.origin.y - rect.size.height // Flip the y-coordinate
+                rect.origin.y = CGFloat(cgimg.height / scale) - rect.origin.y - rect.size.height // Flip the y-coordinate
                 return (string, rect)
             }
         } catch {
