@@ -849,7 +849,10 @@ extension AXUIElement {
         var value: AnyObject?
         let axError = AXUIElementCopyAttributeValue(self, attr as CFString, &value)
         if axError == .success {
-            return value as? T
+            if let r = value as? T {
+                return r
+            }
+            eprint("valueOfAttr get \(attr) type mismatch: expected \(T.self), got \(type(of: value))")
         }
         // eprint("valueOfAttr get \(attr) failed:", axError)
         return nil
@@ -979,6 +982,20 @@ extension AXUIElement {
             return s
         }
         return ""
+    }
+
+    public var filename: String {
+        if let s: String = self.valueOfAttr(kAXFilenameAttribute) {
+            return s
+        }
+        return ""
+    }
+
+    public var url: URL? {
+        if let s: URL = self.valueOfAttr(kAXURLAttribute) {
+            return s
+        }
+        return nil
     }
 
     public func value<T>() -> T? {
