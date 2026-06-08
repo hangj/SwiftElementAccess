@@ -1567,8 +1567,9 @@ extension AXUIElement {
             return nil
         }
 
+        var ret = [(String, CGRect)]()
         if let detector = detector {
-            return await detector(cgimg)
+            ret.append(contentsOf: await detector(cgimg) ?? [])
         }
 
         let img = CIImage(cgImage: cgimg)
@@ -1580,7 +1581,7 @@ extension AXUIElement {
             request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"] // Prioritize Chinese, then English
             try requestHandler.perform([request])
             let observations = request.results ?? [] // as? [VNRecognizedTextObservation] ?? []
-            return observations.compactMap {
+            ret.append(contentsOf: observations.compactMap {
                 guard let candidate = $0.topCandidates(1).first else { return ("", .zero) }
                 let string = candidate.string
                 // Find the bounding-box observation for the string range.
@@ -1596,10 +1597,15 @@ extension AXUIElement {
                 // change the origin to the image's upper-left corner
                 rect.origin.y = CGFloat(cgimg.height / scale) - rect.origin.y - rect.size.height // Flip the y-coordinate
                 return (string, rect)
-            }
+            })
+
+            return ret
         } catch {
             eprint("Error during OCR:", error)
-            return nil
+            if ret.isEmpty {
+                return nil
+            }
+            return ret
         }
     }
 
