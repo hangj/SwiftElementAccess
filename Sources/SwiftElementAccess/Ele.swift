@@ -113,12 +113,13 @@ private func stringFromAttrValue(_ value: AnyObject) -> String {
         return value as! String
     }
     let cfType = CFGetTypeID(value)
+    // let typeDesc = CFCopyTypeIDDescription(cfType)
     if cfType == AXValueGetTypeID() {
         let v = value as! AXValue
         let type = AXValueGetType(v)
 
         switch type {
-            case .axError: 
+            case .axError:
                 var err = AXError.success
                 AXValueGetValue(v, type, &err)
                 return "\(err)"
@@ -185,7 +186,7 @@ private func attrValueToJson(_ value: AnyObject, unique: inout Set<AXUIElement>)
         let type = AXValueGetType(v)
 
         switch type {
-            case .axError: 
+            case .axError:
                 var err = AXError.success
                 AXValueGetValue(v, type, &err)
                 return "\(err)"
@@ -852,7 +853,14 @@ extension AXUIElement {
             if let r = value as? T {
                 return r
             }
-            eprint("valueOfAttr get \(attr) type mismatch: expected \(T.self), got \(type(of: value))")
+            if let v = value {
+                let x = stringFromAttrValue(v)
+                let cfType = CFGetTypeID(value)
+                let typeDesc = CFCopyTypeIDDescription(cfType) as String
+                eprint("valueOfAttr get \(attr) type mismatch: expected \(T.self), got \(type(of: v)): \(typeDesc), value: \(x)")
+            } else {
+                eprint("valueOfAttr get \(attr) type mismatch: expected \(T.self), got nil")
+            }
         }
         // eprint("valueOfAttr get \(attr) failed:", axError)
         return nil
@@ -911,7 +919,7 @@ extension AXUIElement {
     }
 
     public var subRole: String {
-        return self.valueOfAttr(kAXSubroleAttribute, type: String.self) ?? "" 
+        return self.valueOfAttr(kAXSubroleAttribute, type: String.self) ?? ""
     }
 
     /// Example:
@@ -1052,7 +1060,7 @@ extension AXUIElement {
             let ref = AXValueCreate(.cgPoint, &pos)!
             let _ = setAttr(kAXPositionAttribute, value: ref)
         }
-    }   
+    }
 
     /// The vertical and horizontal dimensions of the element
     public var size: CGSize? {
